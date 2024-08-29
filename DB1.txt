@@ -1,2 +1,2 @@
-Admin,292
-Trung,1
+Admin.292
+Trung.1
