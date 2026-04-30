@@ -1,5 +1,3 @@
-# setup.ps1 - Được generate bởi app C# và paste qua UltraViewer
-
 param(
     [string]$ProxyIP = "127.0.0.1",
     [int]$ProxyPort = 1080,
@@ -9,23 +7,35 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-Start-Transcript -Path "C:\Temp\setup.log"
+
+function Show-Notification {
+    param([string]$Message)
+    Add-Type -AssemblyName PresentationFramework
+    [System.Windows.MessageBox]::Show($Message, "UltraAuto Setup", "OK", "Information")
+}
 
 try {
-    # 1. Tạo thư mục làm việc
+    Write-Host "--- Bat dau cau hinh Proxy Zalo ---" -ForegroundColor Cyan
+    
+    # 1. Tao thu muc lam viec
     $WorkDir = "C:\Temp\ZaloSetup"
-    New-Item -ItemType Directory -Path $WorkDir -Force | Out-Null
+    if (!(Test-Path $WorkDir)) { New-Item -ItemType Directory -Path $WorkDir -Force | Out-Null }
     Set-Location $WorkDir
 
-    # 2. Download Proxifier (Portable nếu có, hoặc installer)
-    $ProxifierUrl = "https://www.proxifier.com/download/ProxifierPE.zip"  # Portable Edition
-    # Hoặc dùng link portable đã upload lên server của bạn
-    
-    Write-Host "Downloading Proxifier..."
-    Invoke-WebRequest -Uri $ProxifierUrl -OutFile "$WorkDir\Proxifier.zip"
-    Expand-Archive -Path "$WorkDir\Proxifier.zip" -DestinationPath "$WorkDir\Proxifier" -Force
+    # 2. Kiem tra va Tai Proxifier
+    $ProxifierExe = "$WorkDir\Proxifier\Proxifier.exe"
+    if (!(Test-Path $ProxifierExe)) {
+        Write-Host "Dang tai Proxifier Portable..." -ForegroundColor Yellow
+        $ProxifierUrl = "https://www.proxifier.com/download/ProxifierPE.zip"
+        Invoke-WebRequest -Uri $ProxifierUrl -OutFile "$WorkDir\Proxifier.zip" -UseBasicParsing
+        Expand-Archive -Path "$WorkDir\Proxifier.zip" -DestinationPath "$WorkDir\Proxifier" -Force
+        Remove-Item "$WorkDir\Proxifier.zip" -Force
+    } else {
+        Write-Host "Da co Proxifier, bo qua buoc tai." -ForegroundColor Green
+    }
 
-    # 3. Tạo profile Proxifier (.ppx)
+    # 3. Tao profile Proxifier (.ppx)
+    Write-Host "Dang cau hinh Proxy va Rules..." -ForegroundColor Yellow
     $ProfilePath = "$WorkDir\ZaloProfile.ppx"
     
     $AuthXml = if ($ProxyUser -and $ProxyPass) {
@@ -42,9 +52,9 @@ try {
 
     $Protocol = switch ($ProxyType) {
         "SOCKS5" { "SOCKS5" }
-        "HTTP" { "HTTP" }
-        "HTTPS" { "HTTPS" }
-        default { "SOCKS5" }
+        "HTTP"   { "HTTP" }
+        "HTTPS"  { "HTTPS" }
+        default  { "SOCKS5" }
     }
 
     $ProfileXml = @"
@@ -76,29 +86,30 @@ $AuthXml
 </ProxifierProfile>
 "@
 
-    $ProfileXml | Out-File -FilePath $ProfilePath -Encoding UTF8
+    $ProfileXml | Out-File -FilePath $ProfilePath -Encoding UTF8 -Force
 
-    # 4. Launch Proxifier với profile
-    $ProxifierExe = "$WorkDir\Proxifier\Proxifier.exe"
-    if (Test-Path $ProxifierExe) {
+    # 4. Kiem tra file cau hinh va Chay Proxifier
+    if (Test-Path $ProfilePath) {
+        Write-Host "Dang khoi chay Proxifier..." -ForegroundColor Green
+        # Tat Proxifier cu neu dang chay de ap dung profile moi
+        Get-Process Proxifier -ErrorAction SilentlyContinue | Stop-Process -Force
+        
         Start-Process -FilePath $ProxifierExe -ArgumentList "`"$ProfilePath`""
-        Write-Host "Proxifier đã khởi động với proxy $ProxyIP`:$ProxyPort"
+        
+        # 5. Dang ky Startup
+        $WshShell = New-Object -ComObject WScript.Shell
+        $Shortcut = $WshShell.CreateShortcut("$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\ProxifierZalo.lnk")
+        $Shortcut.TargetPath = $ProxifierExe
+        $Shortcut.Arguments = "`"$ProfilePath`""
+        $Shortcut.Save()
+
+        Show-Notification "Cài đặt Proxy cho Zalo THÀNH CÔNG!`n`nProxy: $ProxyIP : $ProxyPort`nRules: Chỉ áp dụng cho Zalo.exe"
     } else {
-        throw "Không tìm thấy Proxifier.exe"
+        throw "Khong the tao file cau hinh .ppx"
     }
-
-    # 5. Tạo shortcut khởi động cùng Windows (optional)
-    $WshShell = New-Object -ComObject WScript.Shell
-    $Shortcut = $WshShell.CreateShortcut("$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\ProxifierZalo.lnk")
-    $Shortcut.TargetPath = $ProxifierExe
-    $Shortcut.Arguments = "`"$ProfilePath`""
-    $Shortcut.Save()
-
-    Write-Host "HOÀN TẤT! Zalo sẽ chạy qua proxy."
 }
 catch {
-    Write-Error "LỖI: $_"
-}
-finally {
-    Stop-Transcript
+    $ErrorMsg = "LOI: $($_.Exception.Message)"
+    Write-Host $ErrorMsg -ForegroundColor Red
+    Show-Notification $ErrorMsg
 }
