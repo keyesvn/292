@@ -1,0 +1,40 @@
+{
+  "name": "zalo-profile-manager",
+  "version": "0.2.0",
+  "description": "Native ZaloPC profile manager ZPool with isolated appdata and proxy support",
+  "author": {
+    "name": "292server",
+    "url": "https://t.me/Trung292sv"
+  },
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/**/*.test.js",
+    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node --check src/native-core.js && node --check src/bounded-json-request.js && node --check src/identity-persistence.js && node --check src/update-manager.js && node --check src/account/agent.js && node --check src/account/api-client.js && node --check src/account/credential-store.js && node --check src/zpool/zpool-app-init.js && node --check src/zpool/zpool-helper.js && node --check src/zpool/zpool.js && node --check scripts/after-pack.js",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "@electron/asar": "^3.4.1"
+  },
+  "devDependencies": {
+    "electron": "^37.2.4",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "afterPack": "scripts/after-pack.js",
+    "appId": "vn.zalo.profilemanager",
+    "productName": "ZPool",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "src/Img/logoZP.ico"
+    },
+    "asarUnpack": [
+      "src/zpool/**/*"
+    ]
+  }
+}

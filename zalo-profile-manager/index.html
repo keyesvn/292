@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'" />
+    <title>ZPool</title>
+    <link rel="icon" type="image/x-icon" href="Img/logoZP.ico" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Plus+Jakarta+Sans:ital,wght@0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <img class="brand-logo" src="Img/logoZP2.png" alt="ZPool Logo" />
+          <div><strong>ZPool</strong><small>ZaloPC native</small></div>
+        </div>
+
+        <nav aria-label="Điều hướng chính">
+          <button class="nav-item active" type="button" data-page="profiles">
+            <span class="nav-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect></svg>
+            </span>
+            <span>Profiles</span>
+            <b id="navCount" class="nav-badge">0</b>
+          </button>
+          <button class="nav-item" type="button" data-page="account">
+            <span class="nav-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>02</span><span>Tài khoản</span>
+            <em id="navAccountStatus" class="status-badge-text">OFF</em>
+          </button>
+        </nav>
+
+        <div class="sidebar-account-box">
+          <div class="status-row">
+            <span id="accountPulse" class="pulse blocked"></span>
+            <strong id="sidebarAccountStatus">Chưa kích hoạt</strong>
+          </div>
+          <span id="sidebarAccountPlan" class="account-user-name">Chưa có gói</span>
+          <small id="sidebarAccountExpiry" class="account-expiry-text"></small>
+        </div>
+
+        <div class="version">DESKTOP BUILD <span>v1.0.0</span></div>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div class="mobile-brand">
+            <img src="Img/logoZP2.png" alt="ZPool Logo" />
+            <span>ZPool</span>
+          </div>
+          <div class="topbar-status"><span class="pulse-dot"></span>Native process engine</div>
+          <button class="button primary add-profile-btn" type="button" data-action="create">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>New profile</span>
+          </button>
+        </header>
+
+        <div id="profilesPage" class="content app-page active">
+          <section class="hero-card">
+            <div class="hero-content">
+              <p class="hero-eyebrow">NATIVE ZALOPC WORKSPACES</p>
+              <h1 class="hero-title-main">Mỗi tài khoản.</h1>
+              <h1 class="hero-title-sub">Một không gian riêng.</h1>
+            </div>
+            <div class="hero-banner-visual">
+              <img src="Img/Banner.png" alt="ZPool Banner" />
+            </div>
+          </section>
+
+          <section class="metrics-grid" aria-label="Tổng quan">
+            <div class="metric-card">
+              <div class="metric-icon-box green">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+              </div>
+              <div class="metric-info">
+                <span class="metric-label">TOTAL PROFILES</span>
+                <strong id="metricTotal" class="metric-value">00</strong>
+                <span class="metric-sub">Tổng số profile</span>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <div class="metric-icon-box purple">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+              </div>
+              <div class="metric-info">
+                <span class="metric-label">RUNNING NOW</span>
+                <strong id="metricRunning" class="metric-value">00</strong>
+                <span class="metric-sub">Đang chạy</span>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <div class="metric-icon-box blue">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+              </div>
+              <div class="metric-info">
+                <span class="metric-label">PROXY ENABLED</span>
+                <strong id="metricProxy" class="metric-value">00</strong>
+                <span class="metric-sub">Đã bật proxy</span>
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <div class="metric-icon-box green">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+              </div>
+              <div class="metric-info">
+                <span class="metric-label">STORAGE</span>
+                <strong class="metric-value green-text">LOCAL</strong>
+                <span class="metric-sub">No cloud sync</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="workspace">
+            <div class="workspace-head">
+              <h2>Danh sách Profiles</h2>
+              <div class="workspace-tools">
+                <div class="search-box">
+                  <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <input id="searchInput" type="search" placeholder="Tìm profile hoặc proxy" autocomplete="off" />
+                </div>
+                <div class="sort-control">
+                  <button id="sortButton" class="tool-btn" type="button" title="Sắp xếp profile" aria-label="Sắp xếp profile" aria-haspopup="menu" aria-expanded="false">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+                  </button>
+                  <div id="sortMenu" class="sort-menu" role="menu" hidden>
+                    <button class="sort-option active" type="button" role="menuitemradio" aria-checked="true" data-sort="asc">Tên: A-Z</button>
+                    <button class="sort-option" type="button" role="menuitemradio" aria-checked="false" data-sort="desc">Tên: Z-A</button>
+                  </div>
+                </div>
+                <button class="tool-btn" type="button" title="Chế độ xem">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="profile-table-header">
+              <div class="th profile-col">PROFILE</div>
+              <div class="th route-col">NETWORK ROUTE</div>
+              <div class="th activity-col">LAST ACTIVITY</div>
+              <div class="th status-col">STATUS</div>
+              <div class="th actions-col">ACTIONS</div>
+            </div>
+
+            <div id="profileList" class="profile-list" aria-live="polite"></div>
+
+            <div id="emptyState" class="empty-state" hidden>
+              <div class="empty-orbit"><img src="Img/logoZP2.png" alt="ZPool Logo" /></div>
+              <h3>Chưa có profile nào</h3>
+              <p>Tạo workspace đầu tiên để bắt đầu một tiến trình ZaloPC độc lập.</p>
+              <button class="button primary" type="button" data-action="create">Create first profile</button>
+            </div>
+
+            <div class="quick-tip-banner">
+              <div class="quick-tip-content">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A5.5 5.5 0 1 1 15.5 14.5A7 7 0 0 1 12 18A7 7 0 0 1 8.5 14.5Z"></path><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="M10 22h4"></path></svg>
+                <span>Mẹo: Nhấn đúp vào profile để mở nhanh</span>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </div>
+          </section>
+        </div>
+
+        <div id="accountPage" class="content app-page" hidden>
+          <section class="account-hero">
+            <p class="eyebrow">ACCOUNT ENTITLEMENT</p>
+            <h1>Quyền sử dụng.<br /><i>Gắn với máy này.</i></h1>
+            <div id="accountStatusBadge" class="account-badge blocked">Chưa kích hoạt</div>
+          </section>
+          <section class="account-grid">
+            <div class="account-panel account-activation">
+              <p class="panel-label">KÍCH HOẠT / KÍCH HOẠT LẠI</p>
+              <h2>Nhập key tài khoản</h2>
+              <p>Key được gửi thẳng tới máy chủ qua HTTPS và không được lưu hoặc trả về renderer.</p>
+              <form id="activationForm">
+                <label class="field"><span>Activation key</span><input id="activationKey" type="password" minlength="20" maxlength="100" required autocomplete="off" placeholder="292sv-ZP-••••••••••••••••"></label>
+                <p id="activationError" class="form-error" role="alert"></p>
+                <button class="button primary" type="submit">Kích hoạt máy này</button>
+              </form>
+            </div>
+            <div class="account-panel account-details">
+              <p class="panel-label">THÔNG TIN TÀI KHOẢN</p>
+              <dl>
+                <div><dt>Trạng thái</dt><dd id="accountDetailStatus">Chưa kích hoạt</dd></div>
+                <div><dt>Key</dt><dd id="accountKeyHint">Chưa có</dd></div>
+                <div><dt>Gói</dt><dd id="accountPlan">Chưa có</dd></div>
+                <div><dt>Ngày kích hoạt</dt><dd id="accountActivated">Chưa có</dd></div>
+                <div><dt>Ngày hết hạn</dt><dd id="accountExpires">Chưa có</dd></div>
+              </dl>
+              <button id="accountLogout" class="button ghost" type="button">Đăng xuất và dừng profiles</button>
+              <button id="accountRecover" class="button ghost" type="button" hidden>Đặt lại credential bảo mật</button>
+            </div>
+            <button id="openTelegram" class="telegram-card" type="button" aria-label="Liên hệ mua mới Telegram @Trung292sv" title="Telegram @Trung292sv">
+              <div class="telegram-icon-wrapper">
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="12" cy="12" r="12" fill="#24A1DE"/>
+                  <path fill-rule="evenodd" clip-rule="evenodd" d="M5.42629 11.8385C8.94314 10.3064 11.2884 9.29742 12.462 8.80874C15.8123 7.41372 16.5085 7.17149 16.9622 7.17947C17.062 7.18123 17.2847 7.20593 17.4288 7.32283C17.5505 7.42152 17.584 7.55502 17.5999 7.6489C17.6159 7.74278 17.6358 7.95655 17.62 8.12264C17.4397 10.0163 16.6586 14.6186 16.2608 16.7447C16.0924 17.6444 15.7607 17.9463 15.4398 17.9758C14.7424 18.04 14.2125 17.5147 13.5376 17.0724C12.4815 16.3804 11.8845 15.949 10.858 15.2725C9.67169 14.4907 10.4409 14.0601 11.1166 13.3582C11.2934 13.1745 14.3644 10.3817 14.4239 10.129C14.4313 10.0974 14.4382 9.97914 14.3678 9.91656C14.2974 9.85397 14.1936 9.87538 14.1186 9.89241C14.0123 9.91656 12.3213 11.0345 9.04354 13.2476C8.56317 13.5776 8.12803 13.7384 7.73812 13.7299C7.3081 13.7206 6.48149 13.4868 5.8671 13.2871C5.11354 13.042 4.51481 12.9126 4.567 12.4975C4.59418 12.2813 4.89255 12.0616 5.42629 11.8385Z" fill="white"/>
+                </svg>
+              </div>
+              <div class="telegram-text-block">
+                <span class="telegram-label">Liên hệ mua mới</span>
+                <strong class="telegram-title">Telegram</strong>
+              </div>
+              <svg class="telegram-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </button>
+            <div class="account-policy"><strong>Chính sách offline</strong><p>Khi mất kết nối, app chặn mở/restart ngay. Profiles đang chạy được giữ tối đa 5 phút trước khi dừng an toàn.</p></div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <dialog id="profileDialog">
+      <form id="profileForm" method="dialog">
+        <div class="dialog-head">
+          <div><p>PROFILE CONFIGURATION</p><h2 id="dialogTitle">New profile</h2></div>
+          <button class="icon-button" type="button" data-action="cancel" aria-label="Đóng">×</button>
+        </div>
+
+        <input id="profileId" type="hidden" />
+        <div class="form-grid">
+          <label class="field span-2">
+            <span>Tên profile</span>
+            <input id="profileName" required maxlength="80" placeholder="Ví dụ: Sales North" />
+          </label>
+          <label class="field span-2">
+            <span>Ghi chú</span>
+            <input id="profileNote" maxlength="160" placeholder="Mô tả ngắn để nhận biết profile" />
+          </label>
+          <fieldset class="color-field span-2">
+            <legend>Màu nhận diện</legend>
+            <div id="colorOptions" class="color-options"></div>
+          </fieldset>
+        </div>
+
+        <div class="proxy-panel">
+          <div class="proxy-heading">
+            <div><h3>Dedicated proxy</h3><p>Áp dụng sau lần mở hoặc restart ZaloPC tiếp theo.</p></div>
+            <label class="switch"><input id="proxyEnabled" type="checkbox" /><span></span></label>
+          </div>
+
+          <div id="quickProxyRow" class="quick-proxy-row">
+            <label class="field">
+              <span>Dán nhanh proxy</span>
+              <div class="quick-proxy-input">
+                <input id="quickProxy" placeholder="103.82.24.174:30114:v6f3:v6f3" autocomplete="off" />
+                <button id="applyQuickProxy" class="button ghost" type="button">Auto fill</button>
+              </div>
+            </label>
+            <small>Hỗ trợ IP:PORT hoặc IP:PORT:USERNAME:PASSWORD</small>
+          </div>
+
+          <div id="proxyFields" class="form-grid proxy-fields">
+            <label class="field">
+              <span>Protocol</span>
+              <select id="proxyProtocol">
+                <option value="http">HTTP</option>
+                <option value="https">HTTPS</option>
+                <option value="socks4">SOCKS4</option>
+                <option value="socks5">SOCKS5</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Port</span>
+              <input id="proxyPort" type="number" min="1" max="65535" placeholder="8080" />
+            </label>
+            <label class="field span-2">
+              <span>Host / IP</span>
+              <input id="proxyHost" placeholder="127.0.0.1" />
+            </label>
+            <label class="check-field span-2">
+              <input id="proxyAuth" type="checkbox" />
+              <span>Dùng username và password</span>
+            </label>
+            <label class="field auth-field">
+              <span>Username</span>
+              <input id="proxyUsername" autocomplete="off" />
+            </label>
+            <label class="field auth-field">
+              <span>Password</span>
+              <input id="proxyPassword" type="password" autocomplete="new-password" />
+            </label>
+          </div>
+
+          <div class="proxy-test-row">
+            <button id="testProxyButton" class="button ghost" type="button">Test connection</button>
+            <span id="proxyTestResult" role="status"></span>
+          </div>
+        </div>
+
+        <p id="formError" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="button ghost" type="button" data-action="cancel">Cancel</button>
+          <button class="button primary" type="submit">Save profile</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="confirmDialog" class="confirm-dialog">
+      <div class="confirm-mark">!</div>
+      <h2>Xóa profile?</h2>
+      <p>Tiến trình profile sẽ dừng và Profile sẽ bị xóa vĩnh viễn.</p>
+      <div class="dialog-actions">
+        <button class="button ghost" type="button" data-confirm="cancel">Cancel</button>
+        <button class="button danger" type="button" data-confirm="delete">Delete profile</button>
+      </div>
+    </dialog>
+
+    <div id="toast" class="toast" role="status"></div>
+    <script src="renderer.js"></script>
+  </body>
+</html>
