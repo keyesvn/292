@@ -7,7 +7,7 @@ const state = {
   deleteId: null,
   page: "profiles",
   account: { status: "checking", uid: "", canOperate: false },
-  update: { status: "idle", currentVersion: "0.2.0", latestVersion: "0.2.0", progress: 0, checkedAt: null, error: "" },
+  update: { status: "idle", currentVersion: "0.3.0", latestVersion: "0.3.0", progress: 0, checkedAt: null, error: "" },
 };
 
 const DESIGN_WIDTH = 1280;
@@ -120,7 +120,7 @@ function renderUpdate() {
   const update = state.update;
   const copy = {
     idle: ["Sẵn sàng kiểm tra", "ZPool sẽ tự kiểm tra bản phát hành mới."],
-     checking: ["Đang kiểm tra phiên bản", "Đang kết nối tới Server 292 Auth..."],
+    checking: ["Đang kiểm tra phiên bản", "Đang kết nối tới 292Server..."],
     available: [`Đã tìm thấy ZPool ${update.latestVersion}`, "Bản mới đang được tải tự động."],
     downloading: [`Đang tải ZPool ${update.latestVersion}`, `Đã tải ${update.progress || 0}% bộ cài.`],
     downloaded: [`ZPool ${update.latestVersion} đã sẵn sàng`, "Đóng các profile đang chạy và cài phiên bản mới."],

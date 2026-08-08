@@ -696,6 +696,154 @@ test("Zpool only arbitrates the three permissions it has a policy for", () => {
   // Zalo's own popup configuration must survive: no blanket window-open override.
   assert.doesNotMatch(source, /setWindowOpenHandler/);
   assert.match(source, /did-create-window/);
+  assert.match(source, /did-create-window", \(window, details\)[\s\S]{0,200}syncExternalUserAgent\(window\.webContents, details\?\.url\)/);
+  assert.doesNotMatch(source, /did-create-window", \(window[^)]*\)[\s\S]{0,200}applyExternalUserAgent\(window\.webContents\)/);
+});
+
+test("Zpool app init pins the in-app browser to the profile session", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "src", "zpool", "zpool-app-init.js"), "utf8");
+  const start = source.indexOf("function isZaloInAppBrowserOptions");
+  const end = source.indexOf("function sharedZaloSession", start);
+  assert.ok(start >= 0 && end > start);
+  const isInAppBrowser = vm.runInNewContext(
+    `(() => { ${source.slice(start, end)} return isZaloInAppBrowserOptions; })()`,
+    { process: { env: {} }, writeZBoxDebug: () => {} }
+  );
+  const options = {
+    width: 1250,
+    height: 800,
+    show: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      webSecurity: true,
+      devTools: false,
+    },
+  };
+  assert.equal(isInAppBrowser(options), true);
+  assert.equal(isInAppBrowser({ ...options, webPreferences: { ...options.webPreferences, sandbox: true } }), true);
+  assert.equal(isInAppBrowser({ ...options, width: 1200 }), false);
+  assert.equal(isInAppBrowser({ ...options, webPreferences: { ...options.webPreferences, partition: "persist:other" } }), false);
+  assert.match(source, /fromPartition\("persist:zalo"\)/);
+  assert.match(source, /assigning persist:zalo session to zBox/);
+  assert.match(source, /webPreferences: \{ \.\.\.options\.webPreferences, session: profileSession \}/);
+  assert.match(source, /request === "electron" \? profileElectron : loaded/);
+  assert.doesNotMatch(source, /electron\.BrowserWindow\s*=/);
+  assert.ok(source.indexOf("app.setPath(\"userData\"") < source.indexOf("patchZaloInAppBrowserSession();"));
+});
+
+test("Zpool zBox debug logging stays gated behind an env flag", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "src", "zpool", "zpool-app-init.js"), "utf8");
+  assert.match(source, /process\.stderr\.write\(\`\[zpm:zbox\]/);
+});
+
+test("Zpool patches future Electron imports without assigning its read-only BrowserWindow getter", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "src", "zpool", "zpool-app-init.js"), "utf8");
+  const start = source.indexOf("function patchZaloInAppBrowserSession");
+  const end = source.indexOf("function configureProfileUserData", start);
+  assert.ok(start >= 0 && end > start);
+  function NativeBrowserWindow(options) { this.options = options; }
+  const electron = {};
+  Object.defineProperty(electron, "BrowserWindow", { enumerable: true, get: () => NativeBrowserWindow });
+  const Module = { _load: (request) => request === "electron" ? electron : { request } };
+  const patch = vm.runInNewContext(
+    `(() => { ${source.slice(start, end)} return patchZaloInAppBrowserSession; })()`,
+    {
+      electron,
+      Module,
+      Proxy,
+      Reflect,
+      Object,
+      process: { env: {} },
+      isZBoxDebugEnabled: () => false,
+      writeZBoxDebug: () => {},
+      zBoxDebug: () => {},
+      zBoxDebugEnabled: false,
+      isZaloInAppBrowserOptions: () => false,
+      sharedZaloSession: () => ({}),
+      trackZBoxWindow: (window) => window,
+    }
+  );
+
+  assert.doesNotThrow(() => patch());
+  assert.equal(electron.BrowserWindow, NativeBrowserWindow);
+  const importedElectron = Module._load("electron");
+  assert.notEqual(importedElectron, electron);
+  assert.notEqual(importedElectron.BrowserWindow, NativeBrowserWindow);
+  assert.ok(new importedElectron.BrowserWindow({ marker: true }) instanceof NativeBrowserWindow);
+  assert.deepEqual({ ...Module._load("node:fs") }, { request: "node:fs" });
+});
+
+test("persist:zalo is scoped by a distinct userData path for each appDataId", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "src", "zpool", "zpool-app-init.js"), "utf8");
+  const start = source.indexOf("function configureProfileUserData");
+  const end = source.indexOf("net.createServer", start);
+  assert.ok(start >= 0 && end > start);
+  const paths = [];
+  const configure = vm.runInNewContext(
+    `(() => { ${source.slice(start, end)} return configureProfileUserData; })()`,
+    {
+      app: { getPath: (name) => name === "appData" ? "C:\\Users\\test\\AppData\\Roaming" : "C:\\test\\ZPool.exe", setPath: (name, value) => paths.push([name, value]) },
+      global: {}, path, assert,
+      writeZBoxDebug: () => {},
+    }
+  );
+
+  assert.equal(configure("--appdata-id=1001"), "1001");
+  assert.equal(configure("--appdata-id=1002"), "1002");
+  assert.equal(configure("--appdata-id=0"), "");
+  assert.deepEqual(paths, [
+    ["userData", path.join("C:\\Users\\test\\AppData\\Roaming", "ZaloData_1001")],
+    ["userData", path.join("C:\\Users\\test\\AppData\\Roaming", "ZaloData_1002")],
+  ]);
+});
+
+test("ZBox session cleanup is suppressed only while a zBox window is alive", async () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "src", "zpool", "zpool-app-init.js"), "utf8");
+  const start = source.indexOf("function sharedZaloSession");
+  const end = source.indexOf("function patchZaloInAppBrowserSession", start);
+  assert.ok(start >= 0 && end > start);
+  let nativeClears = 0;
+  let nativeCacheClears = 0;
+  const profileSession = {
+    clearStorageData: async () => { nativeClears += 1; },
+    clearCache: async () => { nativeCacheClears += 1; },
+    cookies: { set: async () => {}, remove: async () => {} },
+  };
+  const scope = vm.runInNewContext(
+    `(() => { const liveZBoxWindows = new Set(); ${source.slice(start, end)} return { sharedZaloSession, trackZBoxWindow, liveZBoxWindowCount }; })()`,
+    {
+      electron: { session: { fromPartition: (partition) => { assert.equal(partition, "persist:zalo"); return profileSession; } } },
+      Promise, Set, Object, URL, assert,
+      process: { env: {} },
+      isZBoxDebugEnabled: () => false,
+      writeZBoxDebug: () => {},
+    }
+  );
+  const shared = scope.sharedZaloSession();
+  let destroyed = false;
+  scope.trackZBoxWindow({
+    isDestroyed: () => destroyed,
+    webContents: { on: () => {} },
+  });
+
+  // Vendor dispose() runs while the window is still alive; it must not wipe the login.
+  await shared.clearCache();
+  await shared.clearStorageData();
+  assert.equal(nativeClears, 0);
+  assert.equal(nativeCacheClears, 0);
+
+  // dispose() calls removeAllListeners(), so liveness must come from the window
+  // itself rather than a `closed` listener that never fires.
+  assert.doesNotMatch(source, /once\("closed"/);
+  destroyed = true;
+  assert.equal(scope.liveZBoxWindowCount(), 0);
+
+  // With no zBox window left, ZPool's own cleanup must still reach the session.
+  await shared.clearCache();
+  await shared.clearStorageData();
+  assert.equal(nativeClears, 1);
+  assert.equal(nativeCacheClears, 1);
 });
 
 test("Zpool permission check handler defers unmanaged permissions and stays fail-closed otherwise", () => {
@@ -789,7 +937,7 @@ test("Zpool external header rewrite skips Zalo-owned pages and only applies to n
   const scope = vm.runInNewContext(
     "(() => { const EXTERNAL_USER_AGENT = 'UA'; const EXTERNAL_BRANDS = 'BRANDS';"
     + " const app = { userAgentFallback: 'NATIVE' };"
-    + `${source.slice(start, end)} return { isWebUrl, isZaloOwnedUrl, shouldUseExternalUserAgent, applyExternalHeaders }; })()`,
+    + `${source.slice(start, end)} return { isWebUrl, isZaloOwnedUrl, shouldUseExternalUserAgent, syncExternalUserAgent, applyExternalHeaders }; })()`,
     { URL }
   );
 
@@ -797,10 +945,37 @@ test("Zpool external header rewrite skips Zalo-owned pages and only applies to n
   assert.equal(scope.isWebUrl("http://example.com"), true);
   assert.equal(scope.isZaloOwnedUrl("https://business.zalo.me/upgrade"), true);
   assert.equal(scope.isZaloOwnedUrl("https://oauth.zaloapp.com/auth"), true);
+  assert.equal(scope.isZaloOwnedUrl("https://id.zalo.cloud/login"), true);
+  assert.equal(scope.isZaloOwnedUrl("https://api.zalo.vn/session"), true);
   assert.equal(scope.isZaloOwnedUrl("https://example.com"), false);
   assert.equal(scope.shouldUseExternalUserAgent("https://business.zalo.me/upgrade"), false);
   assert.equal(scope.shouldUseExternalUserAgent("https://oauth.zaloapp.com/auth"), false);
   assert.equal(scope.shouldUseExternalUserAgent("https://example.com"), true);
+  const contents = {
+    value: "EXTERNAL",
+    isDestroyed: () => false,
+    getUserAgent() { return this.value; },
+    setUserAgent(value) { this.value = value; },
+  };
+  scope.syncExternalUserAgent(contents, "https://business.zalo.me/upgrade");
+  assert.equal(contents.value, "NATIVE");
+  scope.syncExternalUserAgent(contents, "https://id.zalo.me/login");
+  assert.equal(contents.value, "NATIVE");
+  scope.syncExternalUserAgent(contents, "https://example.com/payment");
+  assert.equal(contents.value, "UA");
+  // ZaloPC sets its own `ZaloPC` UA on the ZBox window and the account SSO
+  // depends on it, so the normalization must never touch that web contents.
+  const zBoxContents = {
+    value: "ZALOPC",
+    __zpmZBox: true,
+    isDestroyed: () => false,
+    getUserAgent() { return this.value; },
+    setUserAgent(value) { this.value = value; },
+  };
+  scope.syncExternalUserAgent(zBoxContents, "https://business.zbox.vn/");
+  assert.equal(zBoxContents.value, "ZALOPC");
+  scope.syncExternalUserAgent(zBoxContents, "https://id.zalo.me/login");
+  assert.equal(zBoxContents.value, "ZALOPC");
   // Zalo's own renderer, Zalo-owned web pages, and internal schemes must keep native UA.
   assert.equal(scope.isWebUrl("file:///C:/app/index.html"), false);
   assert.equal(scope.isWebUrl("devtools://devtools/bundled/inspector.html"), false);

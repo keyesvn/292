@@ -608,7 +608,7 @@ app.whenReady().then(async () => {
   updateManager = new UpdateManager({
     currentVersion: app.getVersion(),
     downloadDirectory: path.join(app.getPath("userData"), "updates"),
-    fetchImpl: globalThis.fetch,
+    fetchImpl: (...args) => net.fetch(...args),
   });
   updateManager.on("state", notifyUpdateChanged);
   await accountAgent.initialize();

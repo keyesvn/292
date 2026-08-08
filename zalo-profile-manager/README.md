@@ -31,7 +31,7 @@ npm start
 - Installation ID và bearer session được mã hóa bằng Electron `safeStorage` trong `userData/account.secure`. UID là SHA-256 dẫn xuất từ installation ID, không lấy serial phần cứng.
 - `ACCOUNT_API_URL` bắt buộc là HTTPS. Không đặt key/token trong biến môi trường, JSON, renderer hoặc log.
 - Mọi IPC save/delete/open/restart/test proxy được xác thực sender và guard lại tại main process. Close và logout luôn được phép.
-- Updater chỉ chấp nhận release ổn định và asset HTTPS có tên chính xác `ZPool Setup <version>.exe`; file tải xong phải đủ kích thước và có chữ ký PE `MZ`.
+- Updater chỉ chấp nhận release ổn định và asset HTTPS có tên chính xác `ZPool.Setup.<version>.exe` hoặc `ZPool Setup <version>.exe`; file tải xong phải đủ kích thước và có chữ ký PE `MZ`.
 
 ## Requirements
 

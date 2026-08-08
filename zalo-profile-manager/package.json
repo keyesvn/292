@@ -1,6 +1,6 @@
 {
   "name": "zalo-profile-manager",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Native ZaloPC profile manager ZPool with isolated appdata and proxy support",
   "author": {
     "name": "292server",

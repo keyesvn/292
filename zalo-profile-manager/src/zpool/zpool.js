@@ -3,7 +3,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
-const { app, BrowserWindow, session } = require("electron");
+const { app, BrowserWindow, session, webContents } = require("electron");
 
 // Persisted codec key. Its legacy value must remain unchanged for existing meta.bin files.
 const LEGACY_META_KEY = Buffer.from("ZaX_Meta_2025_16", "utf8");
@@ -63,7 +63,7 @@ function isZaloOwnedUrl(value) {
   if (!isWebUrl(value)) return false;
   try {
     const { hostname } = new URL(value);
-    return /(^|\.)zalo\.me$/i.test(hostname) || /(^|\.)zaloapp\.com$/i.test(hostname);
+    return /(^|\.)(?:zalo\.me|zaloapp\.com|zalo\.cloud|zalo\.ai|zalo\.vn)$/i.test(hostname);
   } catch {
     return false;
   }
@@ -94,6 +94,9 @@ function restoreNativeUserAgent(contents) {
 
 function syncExternalUserAgent(contents, url) {
   if (!contents || contents.isDestroyed() || !EXTERNAL_USER_AGENT) return;
+  // ZBox is a Zalo surface whose UA is set by ZaloPC itself; overwriting it
+  // breaks the account SSO handoff and drops the in-app browser at the login page.
+  if (contents.__zpmZBox) return;
   if (shouldUseExternalUserAgent(url)) applyExternalUserAgent(contents);
   else restoreNativeUserAgent(contents);
 }
@@ -114,11 +117,26 @@ function applyExternalHeaders(headers) {
   return headers;
 }
 
+function isZBoxContentsId(id) {
+  if (id === undefined) return false;
+  try {
+    return webContents.fromId(id)?.__zpmZBox === true;
+  } catch {
+    return false;
+  }
+}
+
 function configureExternalUserAgent(ses) {
   if (!ses || !EXTERNAL_USER_AGENT || !EXTERNAL_BRANDS) return;
   ses.webRequest.onBeforeSendHeaders((details, callback) => {
     const headers = { ...details.requestHeaders };
     const id = details.webContentsId;
+    // ZBox shares the profile session, so the header rewrite has to skip it too:
+    // its requests must keep the ZaloPC UA that the account SSO expects.
+    if (isZBoxContentsId(id)) {
+      callback({ requestHeaders: headers });
+      return;
+    }
     // A non-Zalo http(s) main-frame navigation is treated as external; remember
     // web contents so its subframes and subresources stay consistent with it.
     if (details.resourceType === "mainFrame") {
@@ -466,9 +484,9 @@ function attachWebContents(contents) {
   // Zalo installs its own window-open handler to control how popups (payment and
   // upgrade flows among them) are created. Overwriting it with a blanket allow
   // discards that configuration, so the UA is set without replacing the handler.
-  contents.on("did-create-window", (window) => {
+  contents.on("did-create-window", (window, details) => {
     try {
-      if (window && !window.isDestroyed()) applyExternalUserAgent(window.webContents);
+      if (window && !window.isDestroyed()) syncExternalUserAgent(window.webContents, details?.url);
     } catch {}
   });
   contents.on("dom-ready", () => { applyGeolocationOverride(contents); inject(); });
