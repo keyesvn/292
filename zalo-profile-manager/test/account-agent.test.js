@@ -25,6 +25,22 @@ test("matrix: agent activates, exposes projection only and guards sensitive oper
   assert.doesNotThrow(() => agent.assertAllowed("close"));
 });
 
+test("regression: đổi ngày giữ nguyên credential khi heartbeat vẫn hợp lệ", async () => {
+  let now = Date.parse("2026-07-30T16:59:00.000Z");
+  const store = memoryStore({ token: "token-value", sequence: 0, generation: 3, account: { status: "active", expiresAt: "2026-08-05T01:00:00.000Z" } });
+  const api = { heartbeat: async () => ({ generation: 3, leaseSeconds: 30, graceSeconds: 300, blocked: false, command: null, account: { status: "active", expiresAt: "2026-08-05T01:00:00.000Z" } }) };
+  const agent = new AccountAgent({ store, api, clock: () => now, setTimer: () => 1, clearTimer: () => {} });
+
+  await agent.initialize();
+  now += 2 * 60000; // 23:59 -> 00:01 GMT+7.
+  await agent.heartbeat();
+
+  assert.equal(agent.projection().status, "active");
+  assert.equal(store.saved.token, "token-value");
+  assert.equal(store.saved.sequence, 2);
+  assert.equal(store.saved.account.expiresAt, "2026-08-05T01:00:00.000Z");
+});
+
 test("matrix: mất mạng chặn operation mới ngay, hết grace 5 phút thì enforce một lần", async () => {
   let now = 1000;
   let enforced = 0;
@@ -142,6 +158,48 @@ test("credential store encrypts installation ID/session and UID is stable", () =
     assert.equal(raw.includes("top-secret"), false);
     assert.equal(store.getOrCreateUid(), first);
     assert.equal(store.loadSession().token, "top-secret");
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test("regression: credential recovery preserves UID and removes only the session", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "zpm-account-recover-"));
+  const filePath = path.join(root, "account.secure");
+  const safeStorage = { isEncryptionAvailable: () => true, encryptString: (value) => Buffer.from(value).map((byte) => byte ^ 0xaa), decryptString: (buffer) => Buffer.from(buffer).map((byte) => byte ^ 0xaa).toString() };
+  try {
+    const store = new CredentialStore({ safeStorage, filePath });
+    const uid = store.getOrCreateUid();
+    store.saveSession({ token: "expired-session" });
+    const agent = new AccountAgent({ store, api: {}, setTimer: () => 1, clearTimer: () => {} });
+    await agent.recover();
+    assert.equal(agent.projection().uid, uid);
+    assert.equal(store.getOrCreateUid(), uid);
+    assert.equal(store.loadSession(), null);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test("regression: corrupted credential restores stable UID from encrypted identity backup", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "zpm-account-identity-"));
+  const filePath = path.join(root, "account.secure");
+  const safeStorage = { isEncryptionAvailable: () => true, encryptString: (value) => Buffer.from(value).map((byte) => byte ^ 0xaa), decryptString: (buffer) => Buffer.from(buffer).map((byte) => byte ^ 0xaa).toString() };
+  try {
+    const store = new CredentialStore({ safeStorage, filePath });
+    const uid = store.getOrCreateUid();
+    fs.writeFileSync(filePath, "corrupt");
+    assert.equal(store.getOrCreateUid(), uid);
+    assert.equal(store.loadSession(), null);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test("regression: corrupted identity backup is repaired from the primary credential", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "zpm-account-identity-repair-"));
+  const filePath = path.join(root, "account.secure");
+  const safeStorage = { isEncryptionAvailable: () => true, encryptString: (value) => Buffer.from(value).map((byte) => byte ^ 0xaa), decryptString: (buffer) => Buffer.from(buffer).map((byte) => byte ^ 0xaa).toString() };
+  try {
+    const store = new CredentialStore({ safeStorage, filePath });
+    const uid = store.getOrCreateUid();
+    fs.writeFileSync(`${filePath}.identity`, "corrupt");
+    assert.equal(store.getOrCreateUid(), uid);
+    assert.equal(store.readIdentity().length > 0, true);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 

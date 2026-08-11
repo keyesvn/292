@@ -8,6 +8,7 @@ class CredentialStore {
   constructor(options) {
     this.safeStorage = options.safeStorage;
     this.filePath = options.filePath;
+    this.identityPath = options.identityPath || `${options.filePath}.identity`;
   }
 
   assertAvailable() {
@@ -35,13 +36,46 @@ class CredentialStore {
     fs.renameSync(temporary, this.filePath);
   }
 
+  readIdentity() {
+    try {
+      const encrypted = fs.readFileSync(this.identityPath);
+      const value = JSON.parse(this.safeStorage.decryptString(encrypted));
+      return typeof value?.installationId === "string" && value.installationId ? value.installationId : "";
+    } catch (error) {
+      if (error.code === "ENOENT") return "";
+      throw new Error("Không thể đọc định danh cài đặt đã mã hóa.");
+    }
+  }
+
+  writeIdentity(installationId) {
+    fs.mkdirSync(path.dirname(this.identityPath), { recursive: true });
+    const encrypted = this.safeStorage.encryptString(JSON.stringify({ installationId }));
+    const temporary = `${this.identityPath}.${process.pid}.${crypto.randomUUID()}.tmp`;
+    fs.writeFileSync(temporary, encrypted, { mode: 0o600 });
+    fs.renameSync(temporary, this.identityPath);
+  }
+
   getOrCreateUid() {
-    const value = this.read();
-    if (!value.installationId) {
-      value.installationId = crypto.randomBytes(32).toString("base64url");
+    this.assertAvailable();
+    let value;
+    try { value = this.read(); }
+    catch (error) {
+      const installationId = this.readIdentity();
+      if (!installationId) throw error;
+      value = { installationId };
       this.write(value);
     }
-    return crypto.createHash("sha256").update(`zpm-installation:${value.installationId}`).digest("hex");
+    const installationId = value.installationId || this.readIdentity() || crypto.randomBytes(32).toString("base64url");
+    if (value.installationId !== installationId) {
+      value.installationId = installationId;
+      this.write(value);
+    }
+    try {
+      if (!this.readIdentity()) this.writeIdentity(installationId);
+    } catch {
+      this.writeIdentity(installationId);
+    }
+    return crypto.createHash("sha256").update(`zpm-installation:${installationId}`).digest("hex");
   }
 
   loadSession() {
@@ -63,7 +97,11 @@ class CredentialStore {
 
   recover() {
     this.assertAvailable();
-    try { fs.rmSync(this.filePath, { force: true }); } catch (error) {
+    try {
+      const installationId = this.readIdentity() || this.read().installationId;
+      if (!installationId) throw new Error("Không còn bản sao định danh cài đặt.");
+      this.write({ installationId });
+    } catch (error) {
       throw new Error(`Không thể đặt lại credential account: ${error.message}`);
     }
   }

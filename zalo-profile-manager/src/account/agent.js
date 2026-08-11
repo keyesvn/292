@@ -306,7 +306,7 @@ class AccountAgent {
     return this.enqueue(async () => {
       await this.enforce("credential-recovery");
       this.store.recover();
-      this.uid = "";
+      try { this.uid = this.store.getOrCreateUid(); } catch { this.uid = ""; }
       this.token = "";
       this.account = null;
       this.status = "inactive";
