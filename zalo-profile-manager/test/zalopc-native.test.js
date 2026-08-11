@@ -798,7 +798,7 @@ test("persist:zalo is scoped by a distinct userData path for each appDataId", ()
   ]);
 });
 
-test("ZBox session cleanup is suppressed only while a zBox window is alive", async () => {
+test("profile session cleanup is always suppressed so periodic ZBox cleanup cannot log out Zalo", async () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "src", "zpool", "zpool-app-init.js"), "utf8");
   const start = source.indexOf("function sharedZaloSession");
   const end = source.indexOf("function patchZaloInAppBrowserSession", start);
@@ -833,17 +833,23 @@ test("ZBox session cleanup is suppressed only while a zBox window is alive", asy
   assert.equal(nativeClears, 0);
   assert.equal(nativeCacheClears, 0);
 
-  // dispose() calls removeAllListeners(), so liveness must come from the window
-  // itself rather than a `closed` listener that never fires.
+  // dispose() calls removeAllListeners(), so liveness remains useful for
+  // diagnostics but is not used as a reason to clear the shared session.
   assert.doesNotMatch(source, /once\("closed"/);
   destroyed = true;
   assert.equal(scope.liveZBoxWindowCount(), 0);
 
-  // With no zBox window left, ZPool's own cleanup must still reach the session.
+  // Cleanup after the ZBox is gone is still blocked: the profile login must
+  // survive vendor cleanup that runs hours later.
   await shared.clearCache();
   await shared.clearStorageData();
-  assert.equal(nativeClears, 1);
-  assert.equal(nativeCacheClears, 1);
+  assert.equal(nativeClears, 0);
+  assert.equal(nativeCacheClears, 0);
+
+  // A cleanup scheduled one day later must remain unable to clear the profile.
+  await new Promise((resolve) => setTimeout(resolve, 1));
+  await shared.clearStorageData({ storages: ["cookies", "localstorage", "indexeddb"] });
+  assert.equal(nativeClears, 0);
 });
 
 test("Zpool permission check handler defers unmanaged permissions and stays fail-closed otherwise", () => {

@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <link rel="stylesheet" href="/admin.css">
+    <script src="/admin.js" defer></script>
+    <title>Zpool Account Manager</title>
+  </head>
+  <body class="admin-page">
+    <a class="skip-link" href="#mainContent">Bỏ qua điều hướng</a>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <a class="brand" href="/admin" aria-label="Zpool Account Manager">
+          <span class="brand-mark">Z</span>
+          <span><strong>Zpool Account Manager</strong><small>Server console</small></span>
+        </a>
+
+        <nav class="sidebar-nav" aria-label="Điều hướng quản trị">
+          <button class="nav-item active" type="button" data-view-target="accounts" aria-current="page">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span>Khách hàng</span><b>{{TOTAL_COUNT}}</b>
+          </button>
+          <button class="nav-item" type="button" data-view-target="archived">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span>Lưu trữ</span><b>{{ARCHIVED_COUNT}}</b>
+          </button>
+          <button class="nav-item" type="button" data-view-target="audit">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            <span>Lịch sử</span>
+          </button>
+          <button class="nav-item" type="button" data-view-target="vless">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6z"/><path d="m9 12 2 2 4-5"/></svg>
+            <span>VLESS Keys</span><b id="vlessCount">-</b>
+          </button>
+          <button class="nav-item" type="button" data-view-target="proton">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6z"/><path d="M8 12h8M12 8v8"/></svg>
+            <span>Proton VPN</span><b id="protonCount">-</b>
+          </button>
+          <button class="nav-item" type="button" data-view-target="gpm">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 9h8M8 13h5M8 17h3"/></svg>
+            <span>GPM Login</span><b id="gpmCount">-</b>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <form class="logout-form" method="post" action="/admin/logout">
+            <input type="hidden" name="csrf" value="{{CSRF}}">
+            <button class="nav-item logout-button" type="submit">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              <span>Đăng xuất</span>
+            </button>
+          </form>
+          <div class="version-tag">v1.2.0</div>
+        </div>
+      </aside>
+
+      <div class="page-frame">
+        <header class="topbar">
+          <button class="icon-button menu-toggle" type="button" aria-label="Mở menu" aria-controls="sidebar" aria-expanded="false">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <div class="breadcrumb"><span>Quản trị</span><i>/</i><strong id="currentViewLabel">Danh sách khách hàng</strong></div>
+          <div class="topbar-actions">
+            <button class="icon-button theme-toggle" type="button" aria-label="Đổi giao diện sáng tối" title="Đổi giao diện sáng tối">
+              <svg class="theme-sun" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+              <svg class="theme-moon" aria-hidden="true" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            </button>
+          </div>
+        </header>
+
+        <main id="mainContent">
+          <!-- Top Header Summary Bar -->
+          <section class="stats-summary-bar" aria-label="Tổng quan trạng thái">
+            <article class="stat-pill-card">
+              <span class="stat-icon">👤</span>
+              <div>
+                <small>Các khách hàng</small>
+                <strong>{{TOTAL_COUNT}}</strong>
+              </div>
+            </article>
+            <article class="stat-pill-card">
+              <span class="stat-icon"><span class="dot-indicator blue"></span></span>
+              <div>
+                <small>Trực tuyến</small>
+                <strong>{{ONLINE_COUNT}}</strong>
+              </div>
+            </article>
+            <article class="stat-pill-card">
+              <span class="stat-icon"><span class="dot-indicator red"></span></span>
+              <div>
+                <small>Hết hạn</small>
+                <strong>{{DEPLETED_COUNT}}</strong>
+              </div>
+            </article>
+            <article class="stat-pill-card">
+              <span class="stat-icon"><span class="dot-indicator orange"></span></span>
+              <div>
+                <small>Sắp hết hạn</small>
+                <strong>{{DEPLETING_COUNT}}</strong>
+              </div>
+            </article>
+            <article class="stat-pill-card">
+              <span class="stat-icon"><span class="dot-indicator grey"></span></span>
+              <div>
+                <small>Đã tắt</small>
+                <strong>{{DISABLED_COUNT}}</strong>
+              </div>
+            </article>
+            <article class="stat-pill-card">
+              <span class="stat-icon"><span class="dot-indicator green"></span></span>
+              <div>
+                <small>Hoạt động</small>
+                <strong>{{ACTIVE_STATUS_COUNT}}</strong>
+              </div>
+            </article>
+          </section>
+
+          <!-- Accounts Main View -->
+          <section class="view-panel active" data-view="accounts">
+            <div class="controls-toolbar">
+              <button class="primary-button new-account-trigger" type="button">
+                <svg aria-hidden="true" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Thêm khách hàng
+              </button>
+              <div class="bulk-action-group">
+                <select id="bulkActionSelect" class="filter-select" aria-label="Thao tác hàng loạt">
+                  <option value="" disabled selected>⚡ Thao tác hàng loạt (0 đã chọn)</option>
+                  <option value="extend">Gia hạn 30 ngày</option>
+                  <option value="unlock">Mở khóa / Bật key</option>
+                  <option value="lock">Khóa / Tắt key</option>
+                  <option value="force_logout">Force logout</option>
+                  <option value="reset_binding">Reset binding</option>
+                  <option value="archive">Lưu trữ hàng loạt</option>
+                </select>
+                <button type="button" id="applyBulkActionBtn" class="secondary-button" disabled>Áp dụng</button>
+              </div>
+              <div class="search-box">
+                <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="search" placeholder="Tìm tên, ghi chú, key, UID,..." data-table-search="accounts" autocomplete="off">
+              </div>
+              <select class="filter-select" data-status-filter>
+                <option value="all">⚙ Lọc: Tất cả</option>
+                <option value="active">Active</option>
+                <option value="online">Trực tuyến</option>
+                <option value="offline">Ngoại tuyến</option>
+                <option value="locked">Đã tắt</option>
+              </select>
+              <select class="filter-select" data-sort-select>
+                <option value="oldest">Cũ nhất trước ⇅</option>
+                <option value="newest">Mới nhất trước</option>
+                <option value="expiring">Sắp hết hạn trước</option>
+              </select>
+            </div>
+
+            <div class="table-container">
+              <div class="table-scroll">
+                <table class="data-table" data-table="accounts">
+                  <thead>
+                    <tr>
+                      <th><input type="checkbox" id="selectAllCheckbox" title="Chọn tất cả"></th>
+                      <th>HÀNH ĐỘNG</th>
+                      <th>ĐÃ BẬT</th>
+                      <th>TRỰC TUYẾN</th>
+                      <th>KHÁCH HÀNG</th>
+                      <th>ĐIỀU KHIỂN</th>
+                      <th>LẦN TRUY CẬP CUỐI</th>
+                      <th>THỜI HẠN</th>
+                    </tr>
+                  </thead>
+                  <tbody>{{ROWS}}</tbody>
+                </table>
+              </div>
+              <div class="table-footer">
+                <span>{{TOTAL_COUNT}} khách hàng hiện tại</span>
+                <span>Zpool Account Manager Engine</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Archived View -->
+          <section class="view-panel" data-view="archived" hidden>
+            <div class="controls-toolbar">
+              <h2>Key đã lưu trữ</h2>
+              <div class="search-box">
+                <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="search" placeholder="Tìm key đã lưu trữ" data-table-search="archived" autocomplete="off">
+              </div>
+            </div>
+            <div class="table-container">
+              <div class="table-scroll">
+                <table class="data-table" data-table="archived">
+                  <thead>
+                    <tr>
+                      <th>KHÁCH HÀNG</th>
+                      <th>GÓI & GHI CHÚ</th>
+                      <th>LƯU TRỮ LÚC</th>
+                      <th>THAO TÁC</th>
+                    </tr>
+                  </thead>
+                  <tbody>{{ARCHIVED_ROWS}}</tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <!-- Audit Log View -->
+          <section class="view-panel" data-view="audit" hidden>
+            <div class="controls-toolbar">
+              <h2>Lịch sử hệ thống (Security Ledger)</h2>
+              <div class="search-box">
+                <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="search" placeholder="Tìm nhật ký sự kiện..." data-table-search="audit" autocomplete="off">
+              </div>
+            </div>
+            <div class="table-container">
+              <div class="table-scroll">
+                <table class="data-table" data-table="audit">
+                  <thead>
+                    <tr>
+                      <th>THỜI GIAN</th>
+                      <th>SỰ KIỆN</th>
+                      <th>ACCOUNT</th>
+                      <th>UID HINT</th>
+                      <th>CHI TIẾT</th>
+                    </tr>
+                  </thead>
+                  <tbody>{{AUDIT_ROWS}}</tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section class="view-panel vless-scope" data-view="vless" hidden>
+            <div class="vless-hero">
+              <div>
+                <span class="vless-eyebrow">292VPN · Key Infrastructure</span>
+                <h2>VLESS Key Manager</h2>
+                <p>Quản lý client VLESS trực tiếp trên X-UI Panel · panel là nguồn dữ liệu chính.</p>
+              </div>
+              <span class="vless-live-pill" id="vlessConnectionPill" role="status">● Chưa tải</span>
+            </div>
+
+            <section class="stats-summary-bar vless-stats-bar" aria-label="Tổng quan VLESS">
+              <article class="stat-pill-card">
+                <span class="stat-icon">👥</span>
+                <div><small>Tổng khách hàng</small><strong id="vlessStatTotal">-</strong></div>
+              </article>
+              <article class="stat-pill-card">
+                <span class="stat-icon"><span class="dot-indicator green"></span></span>
+                <div><small>Online</small><strong id="vlessStatOnline">-</strong></div>
+              </article>
+              <article class="stat-pill-card">
+                <span class="stat-icon"><span class="dot-indicator grey"></span></span>
+                <div><small>Offline</small><strong id="vlessStatOffline">-</strong></div>
+              </article>
+              <article class="stat-pill-card">
+                <span class="stat-icon"><span class="dot-indicator red"></span></span>
+                <div><small>Đã tắt</small><strong id="vlessStatDisabled">-</strong></div>
+              </article>
+              <article class="stat-pill-card">
+                <span class="stat-icon">🌐</span>
+                <div><small>Inbound</small><strong id="vlessStatInbounds">-</strong></div>
+              </article>
+              <article class="stat-pill-card">
+                <span class="stat-icon">📊</span>
+                <div><small>Traffic đã dùng</small><strong id="vlessStatTraffic">-</strong></div>
+              </article>
+            </section>
+
+            <div class="controls-toolbar">
+              <button class="primary-button new-vless-trigger" type="button" disabled>
+                <svg aria-hidden="true" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Thêm VLESS client
+              </button>
+              <button class="secondary-button" id="refreshVlessButton" type="button">Tải lại</button>
+              <div class="search-box">
+                <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="search" placeholder="Tìm tên client..." id="vlessSearch" autocomplete="off">
+              </div>
+              <select class="filter-select" id="vlessInboundFilter" disabled><option value="all">⚙ Inbound: Tất cả</option></select>
+            </div>
+            <div class="vless-status" id="vlessStatus" role="status">Chọn menu để tải dữ liệu từ panel.</div>
+            <div class="table-container">
+              <div class="table-scroll">
+                <table class="data-table vless-table">
+                  <thead><tr><th>HÀNH ĐỘNG</th><th>TRẠNG THÁI</th><th>CLIENT</th><th>INBOUND</th><th>GIỚI HẠN IP</th><th>DUNG LƯỢNG</th><th>ĐÃ SỬ DỤNG</th><th>THỜI HẠN</th></tr></thead>
+                  <tbody id="vlessClientRows"><tr class="empty-row"><td colspan="8">Chưa có dữ liệu.</td></tr></tbody>
+                </table>
+              </div>
+              <div class="table-footer"><span id="vlessClientSummary">0 VLESS client</span><span>292VPN · X-UI Panel source of truth</span></div>
+            </div>
+          </section>
+
+          <section class="view-panel proton-scope" data-view="proton" hidden>
+            <header class="proton-topbar">
+              <div><p class="proton-breadcrumb">Không gian quản trị <span>/</span> <b id="protonBreadcrumbName">Tài khoản</b></p><h2>Proton Operations</h2><small id="protonWorkerDetail">Worker chưa tải trạng thái.</small></div>
+              <div class="proton-top-actions">
+                <span class="proton-live-pill" id="protonConnectionPill" role="status">● Chưa tải</span>
+                <button class="proton-button secondary" type="button" id="protonPortabilityButton">Nhập / Xuất</button>
+                <button class="proton-button secondary" type="button" id="newProtonAccountButton">Thêm tài khoản</button>
+                <button class="proton-button primary" type="button" id="protonRefreshButton"><span class="proton-refresh-icon">↻</span> Đồng bộ</button>
+              </div>
+            </header>
+            <section class="proton-metrics" aria-label="Thống kê Proton VPN">
+              <article><div class="proton-metric-symbol">01</div><p>Tổng thiết bị</p><div><strong id="protonStatDevices">-</strong><span id="protonStatCapacity"></span></div><small>Phiên VPN đang kết nối</small></article>
+              <article><div class="proton-metric-symbol">02</div><p>Đang cho thuê</p><div><strong id="protonStatActive">-</strong><i class="proton-status-dot active"></i></div><small>Thiết bị còn thời hạn</small></article>
+              <article><div class="proton-metric-symbol">03</div><p>Đã quá hạn</p><div><strong id="protonStatExpired">-</strong><i class="proton-status-dot expired"></i></div><small>Thiết bị cần xử lý</small></article>
+              <article class="proton-accent-metric"><div class="proton-metric-symbol">04</div><p>Slot còn trống</p><div><strong id="protonStatAvailable">-</strong></div><small>Sẵn sàng kết nối mới</small></article>
+            </section>
+            <div class="proton-status" id="protonStatus" role="status" aria-live="polite">Chọn menu để tải Proton VPN.</div>
+            <div class="proton-layout">
+              <aside class="proton-account-rail" aria-label="Danh sách tài khoản Proton">
+                <div class="proton-side-label"><span>Tài khoản Proton</span><b id="protonAccountSummary">0 tài khoản</b></div>
+                <div id="protonAccountList" class="proton-account-list"><p class="proton-inline-state">Chưa có dữ liệu.</p></div>
+              </aside>
+              <section class="proton-workspace">
+                <div class="proton-workspace-head">
+                  <div><h3>Thiết bị đang kết nối</h3><p id="protonLastRefresh">Chưa đồng bộ dữ liệu</p></div>
+                  <div class="proton-workspace-actions">
+                    <label class="proton-search"><span aria-hidden="true">⌕</span><input type="search" id="protonSessionSearch" placeholder="Tìm thiết bị, khách hàng, SĐT..." aria-label="Tìm session Proton" autocomplete="off"></label>
+                    <select id="protonSessionStatus" aria-label="Lọc trạng thái Proton"><option value="all">Tất cả trạng thái</option><option value="manager">Manager</option><option value="active">Active</option><option value="expired">Expired</option><option value="unassigned">Unassigned</option><option value="invalid">Invalid</option></select>
+                    <button class="proton-button secondary" type="button" id="protonDryRunButton">Kiểm tra quá hạn</button>
+                    <button class="proton-button danger" type="button" id="protonCleanupButton">Thu hồi máy hết hạn</button>
+                  </div>
+                </div>
+                <select id="protonSessionAccount" class="proton-native-account-select" aria-label="Tài khoản Proton đang chọn" tabindex="-1"></select>
+                <div class="proton-table-wrap"><table><thead><tr><th>Thiết bị / Ứng dụng</th><th>Người thuê</th><th>Hạn thuê</th><th>Thời gian còn lại</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody id="protonSessionRows"><tr><td colspan="6" class="proton-empty-cell">Chưa có dữ liệu.</td></tr></tbody></table></div>
+                <footer class="proton-table-footer"><span id="protonSessionSummary">0 thiết bị</span><span>Dữ liệu trực tiếp từ Proton API</span></footer>
+              </section>
+            </div>
+          </section>
+
+          <section class="view-panel gpm-scope" data-view="gpm" hidden>
+            <header class="gpm-header">
+              <div><p class="gpm-kicker">LICENSE OPERATIONS</p><h2>GPM Login</h2><p>Kiểm soát giấy phép, thiết bị và sub-license từ một mặt phẳng vận hành.</p></div>
+              <button class="gpm-button primary" type="button" id="gpmRefreshButton">Tải lại dữ liệu</button>
+            </header>
+            <div class="gpm-status" id="gpmStatus" role="status" aria-live="polite">Chọn menu để tải GPM Login.</div>
+            <section class="gpm-account-strip" aria-label="Tóm tắt tài khoản GPM">
+              <div class="gpm-account-identity"><span class="gpm-avatar" id="gpmAccountInitials">GP</span><div><strong id="gpmAccountName">Đang chờ dữ liệu</strong><small id="gpmAccountEmail">-</small></div></div>
+              <dl><div><dt>Vai trò</dt><dd id="gpmAccountRole">-</dd></div><div><dt>Tài khoản</dt><dd id="gpmAccountState">-</dd></div><div><dt>Xác minh</dt><dd id="gpmAccountVerified">-</dd></div><div><dt>Giấy phép</dt><dd id="gpmAccountLicenses">-</dd></div></dl>
+            </section>
+            <section class="gpm-license-workspace">
+              <div class="gpm-toolbar">
+                <div><h3>License inventory</h3><p id="gpmLicenseSummary">0 giấy phép</p></div>
+                <div class="gpm-tools"><label class="gpm-search"><span aria-hidden="true">⌕</span><input id="gpmSearch" type="search" placeholder="Tìm product, package, key..." aria-label="Tìm giấy phép GPM" autocomplete="off"></label><select id="gpmStatusFilter" aria-label="Lọc trạng thái giấy phép"><option value="all">Tất cả trạng thái</option><option value="active">Đang hoạt động</option><option value="expired">Hết hạn</option><option value="disabled">Đã tắt</option><option value="pending">Đang chờ</option></select></div>
+              </div>
+              <div class="gpm-table-wrap"><table><thead><tr><th>Sản phẩm / Gói</th><th>License key</th><th>Trạng thái</th><th>Thiết bị</th><th>Hết hạn</th><th>Sub-license</th><th></th></tr></thead><tbody id="gpmLicenseRows"><tr><td colspan="7" class="gpm-empty-cell">Chưa có dữ liệu.</td></tr></tbody></table></div>
+            </section>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <!-- Create New Account Modal (Cấp key mới) -->
+    <dialog id="newAccountDialog">
+      <form method="post" action="/admin/accounts">
+        <input type="hidden" name="csrf" value="{{CSRF}}">
+        <div class="dialog-heading">
+          <div>
+            <h2>Cấp key mới</h2>
+            <span>Thêm khách hàng và cấp thời hạn sử dụng.</span>
+          </div>
+          <button class="dialog-close" type="button" aria-label="Đóng">×</button>
+        </div>
+        <div class="dialog-fields">
+          <label class="wide-field">
+            <span>Tên khách hàng</span>
+            <input name="name" maxlength="100" required placeholder="Ví dụ: May1, May2, Anh Hùng Zpool">
+          </label>
+          <label>
+            <span>Gói sử dụng</span>
+            <input name="plan" maxlength="60" required value="Pro 30" placeholder="Gói VIP / Pro 30">
+          </label>
+          <label>
+            <span>Số ngày sử dụng</span>
+            <input name="days" type="number" min="1" max="3650" value="30" required>
+          </label>
+          <label>
+            <span>Ngày bắt đầu tính hạn</span>
+            <input name="startDate" type="date" id="newAccountStartDate">
+          </label>
+          <label class="wide-field">
+            <span>Ghi chú</span>
+            <textarea name="note" maxlength="300" placeholder="Thông tin chi tiết hoặc nhận diện"></textarea>
+          </label>
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary-button dialog-cancel" type="button">Hủy</button>
+          <button class="primary-button" type="submit">Cấp key</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="newVlessDialog">
+      <form class="vless-scope" id="vlessCreateForm">
+        <input type="hidden" name="csrf" value="{{CSRF}}">
+        <div class="dialog-heading">
+          <div><h2>Cấp VLESS key</h2><span>Tạo client trực tiếp trên X-UI Panel.</span></div>
+          <button class="dialog-close" type="button" aria-label="Đóng">×</button>
+        </div>
+        <div class="dialog-fields">
+          <label class="wide-field"><span>Inbound</span><select name="inboundId" id="vlessInbound" required disabled><option value="">Đang chờ dữ liệu...</option></select></label>
+          <label class="wide-field"><span>Tên client / email</span><input name="email" maxlength="100" pattern="[A-Za-z0-9][A-Za-z0-9._@-]*" required placeholder="client_292vpn"></label>
+          <label><span>Giới hạn IP</span><input name="limitIp" type="number" min="0" max="1000" value="1" required></label>
+          <label><span>Hạn dùng (ngày)</span><input name="limitDays" type="number" min="0" max="36500" value="0" required></label>
+          <label class="wide-field"><span>Dung lượng (GB, 0 = không giới hạn)</span><input name="limitGb" type="number" min="0" max="1000000" step="0.01" value="0" required></label>
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary-button dialog-cancel" type="button">Hủy</button>
+          <button class="primary-button" id="createVlessButton" type="submit" disabled>Cấp key</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="protonAccountDialog" class="proton-scope proton-dialog">
+        <form id="protonAccountForm"><div class="dialog-heading"><div><h2 id="protonAccountDialogTitle">Thêm Proton account</h2><span>Cookie/password được mã hóa ở backend và không hiển thị lại.</span></div><button class="dialog-close" type="button" aria-label="Đóng">×</button></div><div class="dialog-fields"><label class="wide-field"><span>Tên hiển thị account</span><input name="name" maxlength="120" required></label><label class="wide-field"><span>Email đăng nhập Proton</span><input name="email" type="email" maxlength="320" autocomplete="username" required></label><label class="wide-field"><span>UID quản lý</span><input name="uid" maxlength="200" required></label><label class="wide-field"><span>Cookie Proton <em>(bắt buộc khi tạo, để trống khi sửa để giữ nguyên)</em></span><input name="cookie" type="password" autocomplete="new-password" required></label><label><span>Password <em>(tùy chọn, cần để tự động renew)</em></span><input name="password" type="password" autocomplete="new-password"></label><label><span>App version</span><input name="appVersion" maxlength="80"></label><p class="credential-warning wide-field">Cảnh báo: credential sẽ không được hiển thị lại sau khi gửi. Hãy lưu chúng ở nơi an toàn.</p></div><div class="dialog-actions"><button class="secondary-button dialog-cancel" type="button">Hủy</button><button class="primary-button" type="submit">Lưu account</button></div></form>
+    </dialog>
+
+    <dialog id="protonRentalDialog" class="proton-scope proton-dialog">
+      <form id="protonRentalForm"><div class="dialog-heading"><div><h2>Assign rental</h2><span id="protonRentalUidHint">UID thiết bị</span></div><button class="dialog-close" type="button" aria-label="Đóng">×</button></div><div class="dialog-fields"><label><span>Account</span><select name="accountId" class="filter-select" required></select></label><label><span>Customer</span><input name="customer" maxlength="160" required></label><label><span>Số điện thoại</span><input name="phone" maxlength="40" inputmode="tel"></label><label><span>Hạn (ngày)</span><input name="duration" type="number" min="1" max="36500" value="30"></label><label><span>Hoặc hết hạn lúc</span><input name="expiresAt" type="datetime-local"></label><label class="wide-field"><span>Ghi chú</span><textarea name="note" maxlength="500"></textarea></label></div><div class="dialog-actions"><button class="secondary-button dialog-cancel" type="button">Hủy</button><button class="primary-button" type="submit">Lưu rental</button></div></form>
+    </dialog>
+
+    <dialog id="protonPortabilityDialog" class="proton-scope proton-dialog"><div class="dialog-heading"><div><h2>Data portability</h2><span>Chỉ export/import rental metadata, không bao gồm credential.</span></div><button class="dialog-close" type="button" aria-label="Đóng">×</button></div><div class="portability-body"><div class="portability-actions"><button class="secondary-button" type="button" id="exportProtonJson">Export JSON</button><button class="secondary-button" type="button" id="exportProtonCsv">Export CSV</button></div><label class="import-label">Import JSON<input type="file" id="protonImportFile" accept="application/json,.json"></label><label class="check-row"><input type="checkbox" id="protonImportOverwrite"> Ghi đè rental đã tồn tại</label><p class="muted-text">Import là destructive khi bật ghi đè và sẽ yêu cầu xác nhận.</p></div><div class="dialog-actions"><button class="secondary-button dialog-cancel" type="button">Đóng</button></div></dialog>
+
+    <dialog id="gpmLicenseDialog" class="gpm-dialog">
+      <div class="gpm-dialog-head"><div><p>LICENSE DETAIL</p><h2 id="gpmDialogTitle">Chi tiết giấy phép</h2></div><button class="dialog-close" type="button" aria-label="Đóng chi tiết giấy phép">×</button></div>
+      <div id="gpmDialogBody" class="gpm-dialog-body"></div>
+      <div class="gpm-dialog-actions"><button class="gpm-button secondary dialog-cancel" type="button">Đóng</button></div>
+    </dialog>
+
+    <dialog id="gpmScheduleDialog" class="gpm-dialog gpm-schedule-dialog">
+      <form id="gpmScheduleForm">
+        <div class="gpm-dialog-head"><div><p>SUB-LICENSE SCHEDULE</p><h2>Quản lý thời hạn</h2><small id="gpmScheduleKeyHint">Sub-license</small></div><button class="dialog-close" type="button" aria-label="Đóng quản lý thời hạn">×</button></div>
+        <div class="gpm-schedule-fields">
+          <label class="wide-field"><span>Tên sub-license</span><input name="name" maxlength="120" placeholder="Ví dụ: Laptop công ty, Máy A"></label>
+          <label><span>Ngày bắt đầu</span><input name="startsAt" type="date" required></label>
+          <label><span>Số ngày</span><input name="termDays" type="number" min="1" max="36500" value="30" required></label>
+          <label class="gpm-auto-exchange"><input name="autoExchange" type="checkbox"><span>Tự động làm mới key khi hết hạn</span></label>
+          <fieldset><legend>Gia hạn nhanh từ ngày hết hạn hiện tại</legend><div class="gpm-quick-extend"><button type="button" data-gpm-extend-days="7">+7 ngày</button><button type="button" data-gpm-extend-days="30">+30 ngày</button><button type="button" data-gpm-extend-days="90">+90 ngày</button></div></fieldset>
+          <p id="gpmScheduleStatus" class="gpm-schedule-status" role="status" aria-live="polite"></p>
+        </div>
+        <div class="gpm-dialog-actions"><button class="gpm-button secondary dialog-cancel" type="button">Hủy</button><button class="gpm-button primary" type="submit">Lưu lịch</button></div>
+      </form>
+    </dialog>
+
+    <!-- Edit Account Modal -->
+    <dialog id="editAccountDialog">
+      <form method="post" action="" id="editAccountForm">
+        <input type="hidden" name="csrf" value="{{CSRF}}">
+        <input type="hidden" name="action" value="edit">
+        <div class="dialog-heading">
+          <div>
+            <h2>Chỉnh sửa khách hàng</h2>
+            <span>Cập nhật thông tin tài khoản.</span>
+          </div>
+          <button class="dialog-close" type="button" aria-label="Đóng">×</button>
+        </div>
+        <div class="dialog-fields">
+          <label class="wide-field">
+            <span>Tên khách hàng</span>
+            <input id="editName" name="name" maxlength="100" required>
+          </label>
+          <label>
+            <span>Gói sử dụng</span>
+            <input id="editPlan" name="plan" maxlength="60" required>
+          </label>
+          <label>
+            <span>Ngày hết hạn</span>
+            <input id="editExpiry" name="expiresAt" type="date" required>
+          </label>
+          <label class="wide-field">
+            <span>Ghi chú</span>
+            <textarea id="editNote" name="note" maxlength="300"></textarea>
+          </label>
+          <label class="wide-field">
+            <span>Cấp Key mới (để trống nếu giữ nguyên key cũ)</span>
+          </label>
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary-button dialog-cancel" type="button">Hủy</button>
+          <button class="primary-button" type="submit">Lưu thay đổi</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Confirm Dialog -->
+    <dialog id="confirmDialog">
+      <form method="dialog">
+        <div class="dialog-heading">
+          <h2>Xác nhận thao tác</h2>
+        </div>
+        <p id="confirmMessage" class="confirm-message">Thao tác này có thể ảnh hưởng tới phiên đang chạy.</p>
+        <div class="dialog-actions">
+          <button class="secondary-button" value="cancel">Hủy</button>
+          <button class="primary-button danger-button" id="confirmAction" value="confirm">Tiếp tục</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Toast Notification -->
+    <div class="message-toast" data-message="{{MESSAGE_TEXT}}">
+      <div>
+        <strong>Thông báo hệ thống</strong>
+        <p>{{MESSAGE}}</p>
+      </div>
+      {{MESSAGE_ACTION}}
+      <button class="toast-close" type="button" aria-label="Đóng">×</button>
+    </div>
+  </body>
+</html>

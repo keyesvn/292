@@ -1,0 +1,47 @@
+services:
+  account-server:
+    container_name: zpm-account-server
+    build: .
+    restart: unless-stopped
+    entrypoint: ["node"]
+    command: ["src/server.js"]
+    environment:
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?set ADMIN_PASSWORD_HASH}
+      KEY_ENCRYPTION_SECRET: ${KEY_ENCRYPTION_SECRET:?set KEY_ENCRYPTION_SECRET}
+      292VPN_PANEL_API_URL: ${292VPN_PANEL_API_URL:-}
+      292VPN_PANEL_API_TOKEN: ${292VPN_PANEL_API_TOKEN:-}
+      292VPN_PANEL_USERNAME: ${292VPN_PANEL_USERNAME:-}
+      292VPN_PANEL_PASSWORD: ${292VPN_PANEL_PASSWORD:-}
+      292VPN_ALLOW_INSECURE_HTTP: ${292VPN_ALLOW_INSECURE_HTTP:-0}
+      GPM_EMAIL: ${GPM_EMAIL:-}
+      GPM_PASSWORD: ${GPM_PASSWORD:-}
+      GPM_API_BASE_URL: ${GPM_API_BASE_URL:-}
+      GPM_AUTO_EXCHANGE: ${GPM_AUTO_EXCHANGE:-1}
+      GPM_AUTO_EXCHANGE_INTERVAL_MS: ${GPM_AUTO_EXCHANGE_INTERVAL_MS:-60000}
+      GPM_EXPIRING_WINDOW_HOURS: ${GPM_EXPIRING_WINDOW_HOURS:-72}
+      PROTON_API_BASE_URL: ${PROTON_API_BASE_URL:-https://account.protonvpn.com}
+      PROTON_APP_VERSION: ${PROTON_APP_VERSION:-}
+      PROTON_AUTO_REVOKE: ${PROTON_AUTO_REVOKE:-0}
+      PROTON_AUTO_REVOKE_INTERVAL_MS: ${PROTON_AUTO_REVOKE_INTERVAL_MS:-3600000}
+      PROTON_COOKIE: ${PROTON_COOKIE:-}
+      PROTON_PASSWORD: ${PROTON_PASSWORD:-}
+      PROTON_REFRESH_COMMAND: ${PROTON_REFRESH_COMMAND:-/usr/bin/python3}
+      PROTON_REFRESH_ARGS: ${PROTON_REFRESH_ARGS:-["/app/scripts/refresh-proton.py"]}
+      PROTON_REFRESH_TIMEOUT_MS: ${PROTON_REFRESH_TIMEOUT_MS:-120000}
+      NODE_ENV: production
+      PORT: 8080
+      DATABASE_PATH: /data/accounts.sqlite
+      # Backend chỉ bind localhost; reverse proxy cùng host phải gắn X-Forwarded-Proto.
+      TRUST_PROXY: "1"
+    volumes:
+      - account-data:/data
+    ports:
+      - "127.0.0.1:8080:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=768m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  account-data:
+    name: zpm-account-data

@@ -66,18 +66,14 @@ function sharedZaloSession() {
   const profileSession = electron.session.fromPartition("persist:zalo");
   writeZBoxDebug("shared session resolved", { partition: "persist:zalo" });
   if (!profileSession.__zpmSharedStorageProtected) {
-    // InAppBrowser.dispose() calls clearCache() and clearStorageData() from the
-    // window `close` handler, before the window is destroyed. On the shared
-    // session that wipes the account login, so it is suppressed for as long as
-    // a ZBox window is alive.
+    // InAppBrowser.dispose() and periodic vendor cleanup can call clearCache()
+    // or clearStorageData() on the shared session. Both operations can remove
+    // the Zalo login cookie/storage, so never allow them on a live profile
+    // session. Temporary proxy/test sessions are separate and remain cleanable.
     for (const method of ["clearCache", "clearStorageData"]) {
-      const native = profileSession[method].bind(profileSession);
       profileSession[method] = (...args) => {
-        if (liveZBoxWindowCount() > 0) {
-          writeZBoxDebug("blocked zBox session cleanup", { method, argumentCount: args.length });
-          return Promise.resolve();
-        }
-        return native(...args);
+        writeZBoxDebug("blocked profile session cleanup", { method, argumentCount: args.length, liveZBoxWindows: liveZBoxWindowCount() });
+        return Promise.resolve();
       };
     }
     Object.defineProperty(profileSession, "__zpmSharedStorageProtected", { value: true });

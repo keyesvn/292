@@ -20,6 +20,7 @@ npm start
 - Xóa profile chỉ xóa thư mục trực tiếp `ZaloData_<id>` thuộc registry của manager.
 - Đổi proxy khi ZaloPC đang chạy sẽ báo `Restart required`; manager không hot-reload proxy.
 - Đóng manager không tự dừng các tiến trình ZaloPC.
+- Session `persist:zalo` của từng profile chặn `clearStorageData`/`clearCache` từ ZBox để cookie đăng nhập không bị xóa bởi cleanup định kỳ; xóa profile vẫn xóa toàn bộ `ZaloData_<id>` như bình thường.
 - Khi tài khoản bị khóa/force logout hoặc offline quá 5 phút, manager chỉ dừng các `ZaloData_<id>` có trong registry `profiles.json`; không xóa dữ liệu profile.
 - App kiểm tra GitHub Releases `keyesvn/292` khi khởi động và mỗi 60 phút. Bản mới được tự tải vào Electron `userData/updates`; người dùng xác nhận cài trong menu `Cập Nhật`.
 
