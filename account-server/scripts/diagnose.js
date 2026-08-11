@@ -1,0 +1,12 @@
+const { DatabaseSync } = require("node:sqlite");
+const path = process.argv[2] || process.env.DATABASE_PATH || "/data/accounts.sqlite";
+const db = new DatabaseSync(path, { readOnly: true });
+const scalar = (sql) => db.prepare(sql).get();
+const schema = scalar("SELECT sql FROM sqlite_master WHERE name='devices'");
+console.log("DATABASE:", path);
+console.log("SCHEMA:", schema?.sql || "missing");
+console.log("DEVICES:", JSON.stringify(db.prepare("SELECT id, account_id, uid, released_at, last_seen_at FROM devices ORDER BY id").all()));
+console.log("ACCOUNTS:", JSON.stringify(db.prepare("SELECT id, name, plan, status, generation, archived_at, expires_at FROM accounts WHERE archived_at IS NULL ORDER BY id").all()));
+console.log("PROTON_ACCOUNTS:", JSON.stringify(db.prepare("SELECT id, name, email, uid, app_version, length(cookie_encrypted) AS cookie_bytes, length(password_encrypted) AS password_bytes FROM proton_accounts ORDER BY id").all()));
+console.log("AUDIT_RECENT:", JSON.stringify(db.prepare("SELECT event, proton_account_id, account_id, uid_hint, detail, created_at FROM audit ORDER BY id DESC LIMIT 30").all()));
+db.close();
