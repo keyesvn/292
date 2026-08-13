@@ -302,6 +302,26 @@ test("profile toolbar exposes A-Z and Z-A sorting through the filter button", ()
   assert.match(renderer, /setAttribute\("aria-label", `Sắp xếp profile: \$\{label\}`\)/);
 });
 
+test("profile UI exposes bulk creation, selection and protected bulk IPC", () => {
+  const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+  const preload = fs.readFileSync(path.join(__dirname, "..", "src", "preload.js"), "utf8");
+  const html = fs.readFileSync(path.join(__dirname, "..", "src", "index.html"), "utf8");
+  const renderer = fs.readFileSync(path.join(__dirname, "..", "src", "renderer.js"), "utf8");
+  assert.match(html, /data-action="create-many"[\s\S]*id="bulkCreateDialog"[\s\S]*id="bulkActionBar"/);
+  assert.match(html, /id="selectAllProfiles"[\s\S]*data-bulk-action="open"[^>]*>Chạy<[\s\S]*data-bulk-action="close"[\s\S]*data-bulk-action="delete"/);
+  assert.match(renderer, /selected: new Set\(\)/);
+  assert.match(renderer, /window\.profilesApi\.createMany/);
+  assert.match(renderer, /window\.profilesApi\.openMany/);
+  assert.match(preload, /profiles:create-many/);
+  assert.match(preload, /profiles:open-many/);
+  assert.match(preload, /profiles:delete-many/);
+  assert.match(main, /guarded\("profiles:create-many", "save"/);
+  assert.match(main, /guarded\("profiles:open-many", "open"/);
+  assert.match(main, /runtime\.status === "running"[\s\S]*skipped \+= 1/);
+  assert.match(main, /return \{ opened, skipped \}/);
+  assert.match(main, /guarded\("profiles:delete-many", "delete"/);
+});
+
 test("profile editor keeps save actions visible below extended settings", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "src", "index.html"), "utf8");
   const css = fs.readFileSync(path.join(__dirname, "..", "src", "styles.css"), "utf8");

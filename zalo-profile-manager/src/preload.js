@@ -3,9 +3,13 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("profilesApi", {
   list: () => ipcRenderer.invoke("profiles:list"),
   save: (profile) => ipcRenderer.invoke("profiles:save", profile),
+  createMany: (profiles) => ipcRenderer.invoke("profiles:create-many", profiles),
   remove: (id) => ipcRenderer.invoke("profiles:delete", id),
+  removeMany: (ids) => ipcRenderer.invoke("profiles:delete-many", ids),
   open: (id) => ipcRenderer.invoke("profiles:open", id),
+  openMany: (ids) => ipcRenderer.invoke("profiles:open-many", ids),
   close: (id) => ipcRenderer.invoke("profiles:close", id),
+  closeMany: (ids) => ipcRenderer.invoke("profiles:close-many", ids),
   restart: (id) => ipcRenderer.invoke("profiles:restart", id),
   testProxy: (proxy) => ipcRenderer.invoke("proxy:test", proxy),
   onChanged: (callback) => {

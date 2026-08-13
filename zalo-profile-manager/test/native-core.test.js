@@ -287,10 +287,16 @@ test("foreground helper renews its timer and safely removes always-on-top", () =
 
 test("saving a running profile refreshes metadata with its active proxy", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
-  assert.match(source, /runtime\.status === "running" \|\| runtime\.status === "restart-required"/);
+  assert.match(source, /runtime\.status !== "running" && runtime\.status !== "restart-required"/);
   assert.match(source, /proxy: runtime\.activeProxy \|\| existing\.proxy \|\| saved\.proxy/);
   assert.match(source, /ensureProfileData\(app\.getPath\("appData"\), activeProfile\)/);
   assert.match(source, /profileTitle\(activeProfile\)/);
+});
+
+test("changing a saved proxy clears pending identity so the next launch regenerates geolocation", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+  assert.match(source, /function resetIdentityWhenRouteChanges[\s\S]*!sameProxyConfig\(existing\.proxy, saved\.proxy\)[\s\S]*delete saved\.automaticIdentity/);
+  assert.match(source, /profiles:save[\s\S]*resetIdentityWhenRouteChanges\(sanitizeProfile/);
 });
 
 test("opening an existing process reads its active route from metadata", () => {

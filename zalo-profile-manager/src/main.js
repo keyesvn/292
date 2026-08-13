@@ -116,6 +116,31 @@ function notifyProfilesChanged() {
   if (managerWindow && !managerWindow.isDestroyed()) managerWindow.webContents.send("profiles:changed", visibleProfiles());
 }
 
+function resetIdentityWhenRouteChanges(saved, existing) {
+  if (existing?.id && !sameProxyConfig(existing.proxy, saved.proxy)) delete saved.automaticIdentity;
+  return saved;
+}
+
+function syncRuntimeAfterProfileSave(saved, existing) {
+  const runtime = runtimeFor(saved);
+  if (runtime.status !== "running" && runtime.status !== "restart-required") return;
+  const activeProfile = {
+    ...saved,
+    proxy: runtime.activeProxy || existing.proxy || saved.proxy,
+    proxyPublicIp: runtime.proxyPublicIp || existing.proxyPublicIp || "",
+    browserPolicy: runtime.activeBrowserPolicy || existing.browserPolicy || saved.browserPolicy || defaultBrowserPolicy(),
+    automaticIdentity: Object.hasOwn(runtime, "activeAutomaticIdentity")
+      ? runtime.activeAutomaticIdentity
+      : existing.automaticIdentity || saved.automaticIdentity,
+  };
+  ensureProfileData(app.getPath("appData"), activeProfile);
+  profileRuntime.set(saved.id, {
+    ...runtime,
+    status: sameLaunchConfig(activeProfile, saved) ? "running" : "restart-required",
+  });
+  if (runtime.pid) void watchWindowTitle(saved.appDataId, profileTitle(activeProfile));
+}
+
 function assertTrustedSender(event) {
   if (!managerWindow || managerWindow.isDestroyed() || event.sender !== managerWindow.webContents) throw new Error("IPC sender không hợp lệ.");
   const expected = pathToFileURL(path.join(__dirname, "index.html")).href;
@@ -532,31 +557,74 @@ guarded("profiles:save", "save", async (_event, input) => {
   const index = input?.id ? profiles.findIndex((profile) => profile.id === input.id) : -1;
   const existing = index >= 0 ? profiles[index] : {};
   const appDataId = existing.appDataId || nextAvailableAppDataId(profiles, 1000, nativeDataIds());
-  const saved = sanitizeProfile(input || {}, existing, appDataId);
+  const saved = resetIdentityWhenRouteChanges(sanitizeProfile(input || {}, existing, appDataId), existing);
   if (index >= 0) profiles[index] = saved;
   else profiles.unshift(saved);
   writeProfiles(profiles);
-
-  const runtime = runtimeFor(saved);
-  if (runtime.status === "running" || runtime.status === "restart-required") {
-    const activeProfile = {
-      ...saved,
-      proxy: runtime.activeProxy || existing.proxy || saved.proxy,
-      proxyPublicIp: runtime.proxyPublicIp || existing.proxyPublicIp || "",
-      browserPolicy: runtime.activeBrowserPolicy || existing.browserPolicy || saved.browserPolicy || defaultBrowserPolicy(),
-      automaticIdentity: Object.hasOwn(runtime, "activeAutomaticIdentity")
-        ? runtime.activeAutomaticIdentity
-        : existing.automaticIdentity || saved.automaticIdentity,
-    };
-    ensureProfileData(app.getPath("appData"), activeProfile);
-    profileRuntime.set(saved.id, {
-      ...runtime,
-      status: sameLaunchConfig(activeProfile, saved) ? "running" : "restart-required",
-    });
-    if (runtime.pid) void watchWindowTitle(saved.appDataId, profileTitle(activeProfile));
-  }
+  syncRuntimeAfterProfileSave(saved, existing);
   notifyProfilesChanged();
   return publicProfile(saved, runtimeFor(saved));
+});
+
+guarded("profiles:create-many", "save", async (_event, inputs) => {
+  if (!Array.isArray(inputs) || inputs.length < 1 || inputs.length > 100) throw new Error("Số profile phải từ 1 đến 100.");
+  const profiles = readProfiles();
+  const reserved = nativeDataIds();
+  const created = [];
+  for (const input of inputs) {
+    const appDataId = nextAvailableAppDataId(profiles, 1000, reserved);
+    const saved = sanitizeProfile(input || {}, {}, appDataId);
+    profiles.unshift(saved);
+    created.push(saved);
+  }
+  writeProfiles(profiles);
+  notifyProfilesChanged();
+  return created.map((profile) => publicProfile(profile, runtimeFor(profile)));
+});
+
+guarded("profiles:open-many", "open", async (_event, ids) => {
+  const uniqueIds = [...new Set(Array.isArray(ids) ? ids.map(String) : [])];
+  if (!uniqueIds.length) throw new Error("Chưa chọn profile cần chạy.");
+  let opened = 0;
+  let skipped = 0;
+  for (const id of uniqueIds) {
+    const profile = readProfiles().find((item) => item.id === id);
+    if (!profile) { skipped += 1; continue; }
+    const runtime = runtimeFor(profile);
+    if (runtime.status === "running") { skipped += 1; continue; }
+    if (runtime.status === "restart-required") await closeProfile(id);
+    await openProfile(id);
+    opened += 1;
+  }
+  return { opened, skipped };
+});
+
+ipcMain.handle("profiles:close-many", async (event, ids) => {
+  assertTrustedSender(event);
+  const uniqueIds = [...new Set(Array.isArray(ids) ? ids.map(String) : [])];
+  for (const id of uniqueIds) await closeProfile(id);
+  return true;
+});
+
+guarded("profiles:delete-many", "delete", async (_event, ids) => {
+  const uniqueIds = [...new Set(Array.isArray(ids) ? ids.map(String) : [])];
+  if (!uniqueIds.length) return false;
+  const profiles = readProfiles();
+  const selected = profiles.filter((profile) => uniqueIds.includes(profile.id));
+  for (const profile of selected) await closeProfile(profile.id);
+  for (const profile of selected) {
+    const dataPath = assertOwnedProfilePath(
+      app.getPath("appData"),
+      path.join(app.getPath("appData"), `ZaloData_${Number(profile.appDataId)}`),
+      profile.appDataId,
+      profiles.map((item) => item.appDataId)
+    );
+    fs.rmSync(dataPath, { recursive: true, force: true });
+    profileRuntime.delete(profile.id);
+  }
+  writeProfiles(profiles.filter((profile) => !uniqueIds.includes(profile.id)));
+  notifyProfilesChanged();
+  return true;
 });
 
 guarded("profiles:delete", "delete", async (_event, id) => {

@@ -64,10 +64,16 @@
             <span>ZPool</span>
           </div>
           <div class="topbar-status"><span class="pulse-dot"></span>Native process engine</div>
-          <button class="button primary add-profile-btn" type="button" data-action="create">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            <span>New profile</span>
-          </button>
+          <div class="topbar-actions">
+            <button class="button ghost" type="button" data-action="create-many">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><path d="M17.5 14v7M14 17.5h7"></path></svg>
+              <span>Tạo nhiều</span>
+            </button>
+            <button class="button primary add-profile-btn" type="button" data-action="create">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span>New profile</span>
+            </button>
+          </div>
         </header>
 
         <div id="profilesPage" class="content app-page active">
@@ -152,6 +158,10 @@
             </div>
 
             <div class="profile-table-header">
+              <label class="selection-check" title="Chọn tất cả profile đang hiển thị">
+                <input id="selectAllProfiles" type="checkbox" aria-label="Chọn tất cả profile đang hiển thị" />
+                <span></span>
+              </label>
               <div class="th profile-col">PROFILE</div>
               <div class="th route-col">NETWORK ROUTE</div>
               <div class="th activity-col">LAST ACTIVITY</div>
@@ -379,15 +389,47 @@
       </form>
     </dialog>
 
+    <dialog id="bulkCreateDialog">
+      <form id="bulkCreateForm" class="bulk-form" method="dialog">
+        <div class="dialog-head">
+          <div><p>BULK PROFILE CREATION</p><h2>Tạo nhiều profile</h2></div>
+          <button class="icon-button" type="button" data-action="cancel-create-many" aria-label="Đóng">×</button>
+        </div>
+        <div class="form-grid">
+          <label class="field"><span>Tiền tố tên</span><input id="bulkNamePrefix" required maxlength="70" value="Profile" /></label>
+          <label class="field"><span>Số lượng</span><input id="bulkCount" type="number" min="1" max="100" value="5" required /></label>
+          <label class="field"><span>Số bắt đầu</span><input id="bulkStartNumber" type="number" min="0" max="999999" value="1" required /></label>
+          <label class="field"><span>Protocol</span><select id="bulkProxyProtocol"><option value="http">HTTP</option><option value="https">HTTPS</option><option value="socks4">SOCKS4</option><option value="socks5">SOCKS5</option></select></label>
+          <label class="field span-2"><span>Ghi chú chung</span><input id="bulkNote" maxlength="160" placeholder="Để trống nếu không cần ghi chú" /></label>
+          <label class="field span-2"><span>Danh sách proxy, mỗi profile một dòng</span><textarea id="bulkProxyList" rows="7" placeholder="103.82.24.174:30114:user:password"></textarea><small>Để trống để dùng DIRECT. Nếu nhập, số dòng phải bằng số profile.</small></label>
+        </div>
+        <p id="bulkCreateError" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button class="button ghost" type="button" data-action="cancel-create-many">Cancel</button>
+          <button class="button primary" type="submit">Tạo profiles</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="confirmDialog" class="confirm-dialog">
       <div class="confirm-mark">!</div>
-      <h2>Xóa profile?</h2>
-      <p>Tiến trình profile sẽ dừng và Profile sẽ bị xóa vĩnh viễn.</p>
+      <h2 id="confirmTitle">Xóa profile?</h2>
+      <p id="confirmMessage">Tiến trình profile sẽ dừng và Profile sẽ bị xóa vĩnh viễn.</p>
       <div class="dialog-actions">
         <button class="button ghost" type="button" data-confirm="cancel">Cancel</button>
         <button class="button danger" type="button" data-confirm="delete">Delete profile</button>
       </div>
     </dialog>
+
+    <div id="bulkActionBar" class="bulk-action-bar" hidden aria-live="polite">
+      <div class="bulk-selection-copy"><strong id="selectedCount">0</strong><span>profiles đã chọn</span></div>
+      <div class="bulk-action-buttons">
+        <button class="button primary compact" type="button" data-bulk-action="open">Chạy</button>
+        <button class="button ghost compact" type="button" data-bulk-action="close">Đóng</button>
+        <button class="button danger compact" type="button" data-bulk-action="delete">Xóa</button>
+        <button class="icon-button bulk-clear" type="button" data-bulk-action="clear" aria-label="Bỏ chọn tất cả">×</button>
+      </div>
+    </div>
 
     <div id="toast" class="toast" role="status"></div>
     </div>

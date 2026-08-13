@@ -5,6 +5,8 @@ const state = {
   query: "",
   sort: "asc",
   deleteId: null,
+  deleteIds: [],
+  selected: new Set(),
   page: "profiles",
   account: { status: "checking", uid: "", canOperate: false },
   update: { status: "idle", currentVersion: "0.3.4", latestVersion: "0.3.4", progress: 0, checkedAt: null, error: "" },
@@ -51,6 +53,10 @@ const elements = {
   dialog: document.querySelector("#profileDialog"),
   form: document.querySelector("#profileForm"),
   confirmDialog: document.querySelector("#confirmDialog"),
+  bulkCreateDialog: document.querySelector("#bulkCreateDialog"),
+  bulkCreateForm: document.querySelector("#bulkCreateForm"),
+  bulkActionBar: document.querySelector("#bulkActionBar"),
+  selectAll: document.querySelector("#selectAllProfiles"),
   proxyFields: document.querySelector("#proxyFields"),
   testResult: document.querySelector("#proxyTestResult"),
   formError: document.querySelector("#formError"),
@@ -68,6 +74,48 @@ function escapeHtml(value) {
 
 function initials(name) {
   return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+}
+
+function parseProxyLine(value, protocol = "http") {
+  const normalized = String(value || "").trim();
+  const match = normalized.match(/^([^:]+):(\d+)(?::([^:]+):(.+))?$/);
+  if (!match) {
+    throw new Error("Proxy phải có dạng IP:PORT hoặc IP:PORT:USERNAME:PASSWORD.");
+  }
+  const [, host, port, rawUsername, rawPassword] = match;
+  const username = rawUsername?.trim() || "";
+  const password = rawPassword?.trim() || "";
+  const numericPort = Number(port);
+  if (!Number.isInteger(numericPort) || numericPort < 1 || numericPort > 65535) throw new Error("Port proxy không hợp lệ.");
+  return {
+    enabled: true,
+    protocol,
+    host,
+    port: numericPort,
+    useAuthentication: Boolean(username),
+    username,
+    password,
+  };
+}
+
+function visibleProfiles() {
+  const normalizedQuery = state.query.toLowerCase();
+  return state.profiles.filter((profile) => {
+    const proxy = profile.proxy.enabled ? `${profile.proxy.host}:${profile.proxy.port}` : "";
+    return `${profile.name} ${profile.note} ${proxy}`.toLowerCase().includes(normalizedQuery);
+  }).sort((left, right) => {
+    const comparison = left.name.localeCompare(right.name, "vi", { sensitivity: "base", numeric: true });
+    return state.sort === "desc" ? -comparison : comparison;
+  });
+}
+
+function renderSelection(visible) {
+  const visibleIds = visible.map((profile) => profile.id);
+  const selectedVisible = visibleIds.filter((id) => state.selected.has(id)).length;
+  elements.selectAll.checked = visibleIds.length > 0 && selectedVisible === visibleIds.length;
+  elements.selectAll.indeterminate = selectedVisible > 0 && selectedVisible < visibleIds.length;
+  elements.bulkActionBar.hidden = state.selected.size === 0;
+  document.querySelector("#selectedCount").textContent = String(state.selected.size);
 }
 
 function activityTime(value) {
@@ -113,7 +161,7 @@ function renderAccount() {
   document.querySelector("#accountExpires").textContent = accountDate(account.expiresAt);
   document.querySelector("#accountLogout").disabled = !account.uid || account.status === "inactive" || account.status === "unconfigured" || account.status === "credential-error";
   document.querySelector("#accountRecover").hidden = account.status !== "credential-error";
-  document.querySelectorAll('[data-action="create"]').forEach((button) => { button.disabled = !account.canOperate; });
+  document.querySelectorAll('[data-action="create"], [data-action="create-many"]').forEach((button) => { button.disabled = !account.canOperate; });
 }
 
 function renderUpdate() {
@@ -176,14 +224,10 @@ function switchPage(page) {
 }
 
 function render() {
-  const normalizedQuery = state.query.toLowerCase();
-  const visible = state.profiles.filter((profile) => {
-    const proxy = profile.proxy.enabled ? `${profile.proxy.host}:${profile.proxy.port}` : "";
-    return `${profile.name} ${profile.note} ${proxy}`.toLowerCase().includes(normalizedQuery);
-  }).sort((left, right) => {
-    const comparison = left.name.localeCompare(right.name, "vi", { sensitivity: "base", numeric: true });
-    return state.sort === "desc" ? -comparison : comparison;
-  });
+  for (const id of state.selected) {
+    if (!state.profiles.some((profile) => profile.id === id)) state.selected.delete(id);
+  }
+  const visible = visibleProfiles();
 
   document.querySelector("#navCount").textContent = state.profiles.length;
   document.querySelector("#metricTotal").textContent = String(state.profiles.length).padStart(2, "0");
@@ -220,7 +264,11 @@ function render() {
     const [actTime, actDate] = rawActivity.includes(" - ") ? rawActivity.split(" - ") : ["--:--", rawActivity];
 
     return `
-      <article class="profile-row" data-id="${escapeHtml(profile.id)}">
+      <article class="profile-row ${state.selected.has(profile.id) ? "selected" : ""}" data-id="${escapeHtml(profile.id)}">
+        <label class="selection-check row-selection" title="Chọn profile">
+          <input type="checkbox" data-select-profile="${escapeHtml(profile.id)}" aria-label="Chọn ${escapeHtml(profile.name)}" ${state.selected.has(profile.id) ? "checked" : ""} />
+          <span></span>
+        </label>
         <div class="profile-identity">
           <div class="avatar" style="background:${escapeHtml(profile.color || "#dcf1e7")}">${escapeHtml(initials(profile.name))}</div>
           <div class="profile-title-block">
@@ -275,6 +323,7 @@ function render() {
     elements.list.hidden = false;
     elements.list.innerHTML = `<div class="empty-state search-empty" style="display:grid"><h3>Không tìm thấy</h3><p>Không có profile hoặc proxy phù hợp.</p></div>`;
   }
+  renderSelection(visible);
 }
 
 function setProxyUi() {
@@ -290,26 +339,16 @@ function setProxyUi() {
 
 function applyQuickProxy() {
   const value = document.querySelector("#quickProxy").value.trim();
-  const parts = value.split(":").map((part) => part.trim());
-
-  if (![2, 4].includes(parts.length) || parts.some((part) => !part)) {
-    elements.formError.textContent = "Proxy phải có dạng IP:PORT hoặc IP:PORT:USERNAME:PASSWORD.";
-    return false;
-  }
-
-  const [host, port, username = "", password = ""] = parts;
-  const numericPort = Number(port);
-  if (!host || !Number.isInteger(numericPort) || numericPort < 1 || numericPort > 65535) {
-    elements.formError.textContent = "IP hoặc port proxy không hợp lệ.";
-    return false;
-  }
+  let proxy;
+  try { proxy = parseProxyLine(value, document.querySelector("#proxyProtocol").value); }
+  catch (error) { elements.formError.textContent = error.message; return false; }
 
   document.querySelector("#proxyEnabled").checked = true;
-  document.querySelector("#proxyHost").value = host;
-  document.querySelector("#proxyPort").value = port;
-  document.querySelector("#proxyAuth").checked = parts.length === 4;
-  document.querySelector("#proxyUsername").value = username;
-  document.querySelector("#proxyPassword").value = password;
+  document.querySelector("#proxyHost").value = proxy.host;
+  document.querySelector("#proxyPort").value = proxy.port;
+  document.querySelector("#proxyAuth").checked = proxy.useAuthentication;
+  document.querySelector("#proxyUsername").value = proxy.username;
+  document.querySelector("#proxyPassword").value = proxy.password;
   elements.formError.textContent = "";
   elements.testResult.textContent = "Đã tự điền proxy. Nhấn Test connection để kiểm tra.";
   elements.testResult.className = "";
@@ -356,6 +395,27 @@ function openEditor(profile = null) {
   document.querySelector("#profileName").focus();
 }
 
+function openBulkCreate() {
+  elements.bulkCreateForm.reset();
+  document.querySelector("#bulkNamePrefix").value = "Profile";
+  document.querySelector("#bulkCount").value = "5";
+  document.querySelector("#bulkStartNumber").value = "1";
+  document.querySelector("#bulkCreateError").textContent = "";
+  elements.bulkCreateDialog.showModal();
+  document.querySelector("#bulkNamePrefix").focus();
+}
+
+function requestDelete(ids) {
+  state.deleteIds = [...ids];
+  state.deleteId = state.deleteIds.length === 1 ? state.deleteIds[0] : null;
+  const count = state.deleteIds.length;
+  document.querySelector("#confirmTitle").textContent = count > 1 ? `Xóa ${count} profiles?` : "Xóa profile?";
+  document.querySelector("#confirmMessage").textContent = count > 1
+    ? "Tất cả tiến trình đã chọn sẽ dừng và dữ liệu profile sẽ bị xóa vĩnh viễn."
+    : "Tiến trình profile sẽ dừng và Profile sẽ bị xóa vĩnh viễn.";
+  elements.confirmDialog.showModal();
+}
+
 function formData() {
   return {
     id: document.querySelector("#profileId").value || undefined,
@@ -396,8 +456,7 @@ async function handleProfileAction(action, id, button) {
   if (!profile) return;
   if (action === "edit") return openEditor(profile);
   if (action === "delete") {
-    state.deleteId = id;
-    elements.confirmDialog.showModal();
+    requestDelete([id]);
     return;
   }
 
@@ -427,7 +486,9 @@ document.addEventListener("click", (event) => {
   if (!actionButton) return;
   const action = actionButton.dataset.action;
   if (action === "create") openEditor();
+  if (action === "create-many") openBulkCreate();
   if (action === "cancel") elements.dialog.close();
+  if (action === "cancel-create-many") elements.bulkCreateDialog.close();
 });
 
 document.querySelector("#activationForm").addEventListener("submit", async (event) => {
@@ -487,12 +548,20 @@ document.querySelector("#installUpdateButton").addEventListener("click", async (
 });
 
 elements.list.addEventListener("click", (event) => {
+  const checkbox = event.target.closest("[data-select-profile]");
+  if (checkbox) {
+    if (checkbox.checked) state.selected.add(checkbox.dataset.selectProfile);
+    else state.selected.delete(checkbox.dataset.selectProfile);
+    render();
+    return;
+  }
   const button = event.target.closest("[data-action]");
   const row = event.target.closest("[data-id]");
   if (button && row) handleProfileAction(button.dataset.action, row.dataset.id, button);
 });
 
 elements.list.addEventListener("dblclick", (event) => {
+  if (event.target.closest(".selection-check")) return;
   const row = event.target.closest("[data-id]");
   if (!row) return;
   const id = row.dataset.id;
@@ -501,6 +570,42 @@ elements.list.addEventListener("dblclick", (event) => {
     const action = profile.restartRequired ? "restart" : profile.running ? "close" : "open";
     const button = row.querySelector(`[data-action="${action}"]`);
     if (button && !button.disabled) handleProfileAction(action, id, button);
+  }
+});
+
+elements.selectAll.addEventListener("change", () => {
+  for (const profile of visibleProfiles()) {
+    if (elements.selectAll.checked) state.selected.add(profile.id);
+    else state.selected.delete(profile.id);
+  }
+  render();
+});
+
+elements.bulkActionBar.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-bulk-action]");
+  if (!button) return;
+  const action = button.dataset.bulkAction;
+  if (action === "clear") {
+    state.selected.clear();
+    render();
+    return;
+  }
+  const ids = [...state.selected];
+  if (action === "delete") return requestDelete(ids);
+  if (action === "open" || action === "close") {
+    button.disabled = true;
+    try {
+      if (action === "open") {
+        const result = await window.profilesApi.openMany(ids);
+        toast(result.opened
+          ? `Đã chạy ${result.opened} profiles${result.skipped ? `, bỏ qua ${result.skipped} profile đang chạy hoặc không còn tồn tại` : ""}.`
+          : "Các profile đã chọn đều đang chạy.");
+      } else {
+        await window.profilesApi.closeMany(ids);
+        toast(`Đã đóng ${ids.length} profiles.`);
+      }
+    } catch (error) { toast(error.message, true); }
+    finally { button.disabled = false; }
   }
 });
 
@@ -561,6 +666,38 @@ elements.form.addEventListener("submit", async (event) => {
   }
 });
 
+elements.bulkCreateForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const errorElement = document.querySelector("#bulkCreateError");
+  errorElement.textContent = "";
+  const count = Number(document.querySelector("#bulkCount").value);
+  const start = Number(document.querySelector("#bulkStartNumber").value);
+  const prefix = document.querySelector("#bulkNamePrefix").value.trim();
+  const note = document.querySelector("#bulkNote").value;
+  const protocol = document.querySelector("#bulkProxyProtocol").value;
+  const lines = document.querySelector("#bulkProxyList").value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (!prefix || !Number.isInteger(count) || count < 1 || count > 100 || !Number.isInteger(start) || start < 0) {
+    errorElement.textContent = "Tên, số lượng hoặc số bắt đầu không hợp lệ.";
+    return;
+  }
+  if (lines.length && lines.length !== count) {
+    errorElement.textContent = `Cần đúng ${count} dòng proxy hoặc để trống toàn bộ.`;
+    return;
+  }
+  try {
+    const profiles = Array.from({ length: count }, (_, index) => ({
+      name: `${prefix} ${start + index}`,
+      note,
+      color: colors[index % colors.length],
+      proxy: lines.length ? parseProxyLine(lines[index], protocol) : { enabled: false, protocol, host: "", port: "", useAuthentication: false, username: "", password: "" },
+      browserPolicy: { permissions: { geolocation: false, camera: false, microphone: false, notifications: false } },
+    }));
+    await window.profilesApi.createMany(profiles);
+    elements.bulkCreateDialog.close();
+    toast(`Đã tạo ${count} profiles.`);
+  } catch (error) { errorElement.textContent = error.message; }
+});
+
 document.querySelector("#testProxyButton").addEventListener("click", async (event) => {
   const button = event.currentTarget;
   elements.testResult.className = "";
@@ -585,9 +722,14 @@ elements.confirmDialog.addEventListener("click", async (event) => {
   if (!action) return;
   if (action === "cancel") return elements.confirmDialog.close();
   try {
-    await window.profilesApi.remove(state.deleteId);
+    if (state.deleteIds.length > 1) await window.profilesApi.removeMany(state.deleteIds);
+    else await window.profilesApi.remove(state.deleteIds[0]);
+    const deletedCount = state.deleteIds.length;
+    state.selected.clear();
+    state.deleteIds = [];
+    state.deleteId = null;
     elements.confirmDialog.close();
-    toast("Profile và dữ liệu ZaloPC native đã được xóa.");
+    toast(deletedCount > 1 ? `Đã xóa ${deletedCount} profiles và dữ liệu ZaloPC.` : "Profile và dữ liệu ZaloPC native đã được xóa.");
   } catch (error) {
     toast(error.message, true);
   }
