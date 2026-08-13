@@ -416,13 +416,6 @@ function visibleTitleScript(title) {
       if (zaloTitle || loginTitle) {
         document.querySelector("[data-zpm-title-label]")?.remove();
         const titleHost = zaloTitle || loginTitle;
-        titleHost.style.removeProperty("display");
-        titleHost.style.setProperty("min-width", "0", "important");
-        titleHost.style.setProperty("overflow", "hidden", "important");
-        titleHost.style.setProperty("text-overflow", "ellipsis", "important");
-        titleHost.style.setProperty("white-space", "nowrap", "important");
-        titleHost.style.setProperty("font-size", "125%", "important");
-        titleHost.style.setProperty("font-weight", "600", "important");
         let textNode = Array.from(titleHost.childNodes).find((node) => node.nodeType === Node.TEXT_NODE);
         if (!textNode) {
           textNode = document.createTextNode("");

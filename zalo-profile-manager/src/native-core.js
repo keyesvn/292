@@ -1067,14 +1067,55 @@ async function waitForProfileProcess(appDataId, options = {}) {
   throw new Error("Đã launch nhưng không tìm thấy process Zalo đúng --appdata-id.");
 }
 
-async function killProfile(appDataId, runner = runProcess) {
-  const roots = rootProcessesForAppDataId(await queryZaloProcesses(appDataId, runner), appDataId);
-  if (roots.length > 1) throw new Error("Không thể xác định chắc chắn process gốc để dừng.");
-  if (!roots.length) return false;
-  await runner("taskkill.exe", ["/F", "/T", "/PID", String(roots[0].pid)]);
-  const remaining = processesForAppDataId(await queryZaloProcesses(appDataId, runner), appDataId);
-  if (remaining.length) throw new Error("Không thể xác nhận toàn bộ process của profile đã dừng.");
-  return true;
+async function killProfile(appDataId, runner = runProcess, options = {}) {
+  const maxAttempts = Number.isSafeInteger(options.maxAttempts) && options.maxAttempts > 0 ? options.maxAttempts : 3;
+  const maxQueryAttempts = Number.isSafeInteger(options.maxQueryAttempts) && options.maxQueryAttempts > 0 ? options.maxQueryAttempts : 3;
+  const delayMs = Number.isFinite(options.delayMs) && options.delayMs >= 0 ? options.delayMs : 250;
+  const delay = options.delay || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  let lastTerminateError;
+  let lastQueryError;
+  const querySnapshot = async () => {
+    for (let attempt = 0; attempt < maxQueryAttempts; attempt += 1) {
+      try {
+        lastQueryError = undefined;
+        return processesForAppDataId(await queryZaloProcesses(appDataId, runner), appDataId);
+      } catch (error) {
+        lastQueryError = error;
+        if (attempt + 1 < maxQueryAttempts) await delay(delayMs);
+      }
+    }
+    throw new Error(`Không thể xác minh process profile qua CIM sau ${maxQueryAttempts} lần thử: ${lastQueryError?.message || "lỗi truy vấn không xác định."}`);
+  };
+
+  let remaining = await querySnapshot();
+  if (!remaining.length) return false;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const roots = rootProcessesForAppDataId(remaining, appDataId);
+    const targets = roots.length ? roots : remaining;
+
+    for (const target of targets) {
+      try {
+        await runner("taskkill.exe", ["/F", "/T", "/PID", String(target.pid)]);
+      } catch (error) {
+        lastTerminateError = error;
+      }
+    }
+
+    // Snapshot sau terminate là nguồn sự thật, kể cả khi taskkill báo lỗi.
+    await delay(delayMs);
+    try {
+      remaining = await querySnapshot();
+    } catch (error) {
+      const pids = remaining.map((item) => item.pid).join(", ");
+      throw new Error(`Không thể xác minh process profile sau terminate; PID đã biết còn sống: ${pids || "không xác định"}; lỗi query gần nhất: ${error.message}`);
+    }
+    if (!remaining.length) return true;
+  }
+
+  const pids = remaining.map((item) => item.pid).join(", ");
+  const reason = lastTerminateError?.message || "Không thể xác nhận terminate thành công.";
+  throw new Error(`Không thể dừng process của profile; PID còn sống: ${pids}; lỗi terminate gần nhất: ${reason}`);
 }
 
 function profileTitle(profile) {

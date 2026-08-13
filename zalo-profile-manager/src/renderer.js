@@ -7,7 +7,7 @@ const state = {
   deleteId: null,
   page: "profiles",
   account: { status: "checking", uid: "", canOperate: false },
-  update: { status: "idle", currentVersion: "0.3.0", latestVersion: "0.3.0", progress: 0, checkedAt: null, error: "" },
+  update: { status: "idle", currentVersion: "0.3.4", latestVersion: "0.3.4", progress: 0, checkedAt: null, error: "" },
 };
 
 const DESIGN_WIDTH = 1280;
@@ -124,6 +124,7 @@ function renderUpdate() {
     available: [`Đã tìm thấy ZPool ${update.latestVersion}`, "Bản mới đang được tải tự động."],
     downloading: [`Đang tải ZPool ${update.latestVersion}`, `Đã tải ${update.progress || 0}% bộ cài.`],
     downloaded: [`ZPool ${update.latestVersion} đã sẵn sàng`, "Đóng các profile đang chạy và cài phiên bản mới."],
+    installing: [`Đang khởi động bộ cài ZPool ${update.latestVersion}`, "ZPool sẽ thoát trước khi bộ cài được mở."],
     "up-to-date": ["Bạn đang dùng bản mới nhất", "Không có bản cập nhật nào cần tải."],
     error: ["Chưa thể kiểm tra cập nhật", update.error || "Hãy kiểm tra kết nối mạng và thử lại."],
   }[update.status] || ["Trạng thái cập nhật", "Đang đồng bộ thông tin."];
@@ -136,7 +137,7 @@ function renderUpdate() {
   document.querySelector("#updateCheckedAt").textContent = checked && !Number.isNaN(checked.getTime())
     ? new Intl.DateTimeFormat("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" }).format(checked)
     : "Chưa kiểm tra";
-  const busy = update.status === "checking" || update.status === "downloading" || update.status === "available";
+  const busy = update.status === "checking" || update.status === "downloading" || update.status === "available" || update.status === "installing";
   document.querySelector("#checkUpdateButton").disabled = busy;
   document.querySelector("#installUpdateButton").hidden = update.status !== "downloaded";
   document.querySelector("#updateProgressWrap").hidden = update.status !== "downloading";

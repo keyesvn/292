@@ -79,6 +79,60 @@ test("update check accepts GitHub-normalized installer names", async () => {
   assert.equal(result.error, "");
 });
 
+test("up-to-date check removes downloaded installers from older versions", async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "zpm-update-stale-"));
+  const stale = path.join(directory, "ZPool.Setup.0.3.0.exe");
+  fs.writeFileSync(stale, "MZ-old");
+  const manager = new UpdateManager({
+    currentVersion: "0.3.0",
+    downloadDirectory: directory,
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({
+        tag_name: "v0.3.0",
+        html_url: "https://github.com/keyesvn/292/releases/tag/v0.3.0",
+        draft: false,
+        prerelease: false,
+        assets: [{
+          name: "ZPool.Setup.0.3.0.exe",
+          browser_download_url: "https://github.com/keyesvn/292/releases/download/v0.3.0/ZPool.Setup.0.3.0.exe",
+        }],
+      }),
+    }),
+  });
+
+  try {
+    assert.equal((await manager.check()).status, "up-to-date");
+    assert.equal(fs.existsSync(stale), false);
+    assert.equal(manager.installerPath(), "");
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("marking an update as installing hides the downloaded installer action", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "zpm-update-installing-"));
+  const installer = path.join(directory, "ZPool.Setup.0.4.0.exe");
+  fs.writeFileSync(installer, "MZ-ready");
+  const manager = new UpdateManager({ currentVersion: "0.3.0", downloadDirectory: directory, fetchImpl: async () => {} });
+  try {
+    manager.state = { ...manager.state, status: "downloaded", installerPath: installer, latestVersion: "0.4.0" };
+    manager.markInstalling();
+    assert.equal(manager.projection().status, "installing");
+    assert.equal(manager.installerPath(), "");
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("restoring a failed installer launch keeps a valid downloaded state", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "zpm-update-restore-"));
+  const installer = path.join(directory, "ZPool.Setup.0.4.0.exe");
+  fs.writeFileSync(installer, "MZ-ready");
+  const manager = new UpdateManager({ currentVersion: "0.3.0", downloadDirectory: directory, fetchImpl: async () => {} });
+  try {
+    manager.state = { ...manager.state, status: "installing", installerPath: installer, latestVersion: "0.4.0" };
+    manager.restoreDownloaded();
+    assert.equal(manager.projection().status, "downloaded");
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("update check detects a newer GitHub release before downloading it", async () => {
   const manager = new UpdateManager({
     currentVersion: "0.2.0",

@@ -22,6 +22,7 @@ const {
   resolveZaloInstall,
   nextAvailableAppDataId,
   profileTitle,
+  powershellEncoded,
   processesForAppDataId,
   publicProfile,
   queryZaloProcesses,
@@ -52,6 +53,7 @@ let accountAgent;
 let tray;
 let updateManager;
 let notifiedUpdateVersion = "";
+let updateInstallPromise;
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();
@@ -139,18 +141,12 @@ async function killManagedProfiles() {
   activeProfileOperations.clear();
   const failures = [];
   for (const profile of readProfiles()) {
-    let lastError;
-    for (const delay of [0, 250, 750]) {
-      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
-      try {
-        await killProfile(profile.appDataId);
-        const remaining = (await queryZaloProcesses(profile.appDataId)).filter((item) => item.appDataId === Number(profile.appDataId));
-        if (remaining.length === 0) { lastError = null; break; }
-        lastError = new Error(`${remaining.length} process vẫn đang chạy.`);
-      } catch (error) { lastError = error; }
+    try {
+      await killProfile(profile.appDataId);
+      profileRuntime.delete(profile.id);
+    } catch (error) {
+      failures.push(`${profile.id}: ${error.message}`);
     }
-    if (lastError) failures.push(`${profile.id}: ${lastError.message}`);
-    else profileRuntime.delete(profile.id);
   }
   notifyProfilesChanged();
   if (failures.length) throw new Error(`Không thể xác minh đã dừng profiles: ${failures.join("; ")}`);
@@ -174,6 +170,21 @@ function notifyUpdateChanged(update) {
       notification.show();
     }
   }
+}
+
+function launchInstallerAfterExit(installer) {
+  const encodedPath = Buffer.from(installer, "utf8").toString("base64");
+  const script = `$targetPid=${process.pid}; $target=[Diagnostics.Process]::GetProcessById($targetPid); $started=$target.StartTime; $installer=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encodedPath}')); while($current=Get-Process -Id $targetPid -ErrorAction SilentlyContinue){ if($current.StartTime -ne $started){break}; Start-Sleep -Milliseconds 100 }; Start-Process -FilePath $installer`;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const helper = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-EncodedCommand", powershellEncoded(script)], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    helper.once("spawn", () => { settled = true; helper.unref(); resolve(); });
+    helper.once("error", (error) => { if (!settled) reject(error); });
+  });
 }
 
 function readActiveRoute(appDataId) {
@@ -260,6 +271,7 @@ function launchProfileProcess(executable, appDataId) {
 }
 
 async function openProfile(id) {
+  if (isQuitting || updateInstallPromise) throw new Error("ZPool đang đóng; không thể mở profile mới.");
   accountAgent.assertAllowed("open");
   if (activeProfileOperations.has(id)) throw new Error("Profile đang được mở; vui lòng chờ thao tác hiện tại hoàn tất.");
   const profiles = readProfiles();
@@ -585,16 +597,27 @@ ipcMain.handle("update:get", (event) => { assertTrustedSender(event); return upd
 ipcMain.handle("update:check", (event) => { assertTrustedSender(event); return updateManager.check(); });
 ipcMain.handle("update:install", async (event) => {
   assertTrustedSender(event);
-  const installer = updateManager.installerPath();
-  if (!installer) throw new Error("Bộ cài mới chưa sẵn sàng.");
-  await killManagedProfiles();
-  spawn(installer, [], { detached: true, stdio: "ignore" }).unref();
-  isQuitting = true;
-  updateManager.stop();
-  accountAgent?.stop();
-  tray?.destroy();
-  app.quit();
-  return true;
+  if (updateInstallPromise) throw new Error("Bộ cài đang được khởi động.");
+  updateInstallPromise = (async () => {
+    const installer = updateManager.installerPath();
+    if (!installer) throw new Error("Bộ cài mới chưa sẵn sàng.");
+    await killManagedProfiles();
+    if (!updateManager.installerPath()) throw new Error("Bộ cài mới không còn tồn tại.");
+    updateManager.markInstalling();
+    try {
+      await launchInstallerAfterExit(installer);
+    } catch (error) {
+      updateManager.restoreDownloaded();
+      throw new Error(`Không thể khởi động bộ cài: ${error.message}`);
+    }
+    isQuitting = true;
+    updateManager.stop();
+    accountAgent?.stop();
+    tray?.destroy();
+    app.quit();
+    return true;
+  })().finally(() => { updateInstallPromise = null; });
+  return updateInstallPromise;
 });
 
 app.whenReady().then(async () => {

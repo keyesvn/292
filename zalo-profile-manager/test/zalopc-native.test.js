@@ -72,8 +72,166 @@ test("kill targets only the exact profile root PID", async () => {
     }
     return { stdout: "" };
   };
-  assert.equal(await killProfile(1001, runner), true);
+  assert.equal(await killProfile(1001, runner, { delay: async () => {} }), true);
   assert.deepEqual(calls[1], { command: "taskkill.exe", args: ["/F", "/T", "/PID", "41"] });
+});
+
+test("kill is idempotent when the profile has no process", async () => {
+  const calls = [];
+  const runner = async (command) => { calls.push(command); return { stdout: "" }; };
+  assert.equal(await killProfile(1001, runner), false);
+  assert.deepEqual(calls, ["powershell.exe"]);
+});
+
+test("kill succeeds when taskkill fails but the profile disappears", async () => {
+  let queryCount = 0;
+  const runner = async (command) => {
+    if (command === "powershell.exe") {
+      queryCount += 1;
+      return { stdout: queryCount === 1 ? JSON.stringify({ ProcessId: 41, ParentProcessId: 0, CommandLine: "Zalo.exe --appdata-id=1001" }) : "" };
+    }
+    throw new Error("There is no running instance of the task");
+  };
+  assert.equal(await killProfile(1001, runner, { delay: async () => {} }), true);
+});
+
+test("kill refreshes the root PID when the parent changes", async () => {
+  const killPids = [];
+  let queryCount = 0;
+  const snapshots = [
+    [
+      { ProcessId: 41, ParentProcessId: 0, CommandLine: "Zalo.exe --appdata-id=1001" },
+      { ProcessId: 91, ParentProcessId: 0, CommandLine: "Zalo.exe --appdata-id=10010" },
+    ],
+    [
+      { ProcessId: 51, ParentProcessId: 0, CommandLine: "Zalo.exe --appdata-id=1001" },
+      { ProcessId: 91, ParentProcessId: 0, CommandLine: "Zalo.exe --appdata-id=10010" },
+    ],
+    [],
+  ];
+  const runner = async (command, args) => {
+    if (command === "powershell.exe") return { stdout: JSON.stringify(snapshots[queryCount++] || []) };
+    killPids.push(args.at(-1));
+    if (killPids.length === 1) throw new Error("Access is denied");
+    return { stdout: "" };
+  };
+  assert.equal(await killProfile(1001, runner, { delay: async () => {} }), true);
+  assert.deepEqual(killPids, ["41", "51"]);
+  assert.equal(killPids.includes("91"), false);
+});
+
+test("kill retries a temporary access denial", async () => {
+  let queryCount = 0;
+  let taskkillCount = 0;
+  const runner = async (command) => {
+    if (command === "powershell.exe") {
+      queryCount += 1;
+      return { stdout: queryCount < 3 ? JSON.stringify({ ProcessId: 41, ParentProcessId: 0, CommandLine: "Zalo.exe --appdata-id=1001" }) : "" };
+    }
+    taskkillCount += 1;
+    if (taskkillCount === 1) throw new Error("Access is denied");
+    return { stdout: "" };
+  };
+  assert.equal(await killProfile(1001, runner, { delay: async () => {} }), true);
+  assert.equal(taskkillCount, 2);
+});
+
+test("kill reports live PIDs and the last terminate error after retry exhaustion", async () => {
+  let taskkillCount = 0;
+  const runner = async (command) => {
+    if (command === "powershell.exe") return { stdout: JSON.stringify({ ProcessId: 41, ParentProcessId: 0, CommandLine: "Zalo.exe --appdata-id=1001" }) };
+    taskkillCount += 1;
+    throw new Error(taskkillCount === 1 ? "Access is denied" : "terminate denied again");
+  };
+  await assert.rejects(
+    killProfile(1001, runner, { maxAttempts: 2, delay: async () => {} }),
+    (error) => error.message.includes("PID còn sống: 41") && error.message.includes("terminate denied again")
+  );
+  assert.equal(taskkillCount, 2);
+});
+
+test("kill terminates every orphan root in one verified snapshot", async () => {
+  const killPids = [];
+  let queryCount = 0;
+  const runner = async (command, args) => {
+    if (command === "powershell.exe") {
+      queryCount += 1;
+      return { stdout: queryCount === 1 ? JSON.stringify([
+        { ProcessId: 41, ParentProcessId: 999, CommandLine: "Zalo.exe --appdata-id=1001" },
+        { ProcessId: 42, ParentProcessId: 999, CommandLine: "Zalo.exe --appdata-id=1001" },
+      ]) : "" };
+    }
+    killPids.push(args.at(-1));
+    return { stdout: "" };
+  };
+  assert.equal(await killProfile(1001, runner, { delay: async () => {} }), true);
+  assert.deepEqual(killPids, ["41", "42"]);
+});
+
+test("kill retries a transient CIM query failure", async () => {
+  let queryCount = 0;
+  const runner = async (command) => {
+    if (command === "powershell.exe") {
+      queryCount += 1;
+      if (queryCount === 1) throw new Error("CIM unavailable");
+      return { stdout: queryCount === 2 ? JSON.stringify({ ProcessId: 41, ParentProcessId: 0, CommandLine: "Zalo.exe --appdata-id=1001" }) : "" };
+    }
+    return { stdout: "" };
+  };
+  assert.equal(await killProfile(1001, runner, { delay: async () => {} }), true);
+  assert.equal(queryCount, 3);
+});
+
+test("kill fails clearly when CIM query remains unavailable", async () => {
+  let queryCount = 0;
+  const runner = async (command) => {
+    if (command === "powershell.exe") {
+      queryCount += 1;
+      throw new Error("CIM unavailable");
+    }
+    throw new Error("must not terminate without a verified snapshot");
+  };
+  await assert.rejects(
+    killProfile(1001, runner, { maxQueryAttempts: 2, delay: async () => {} }),
+    /Không thể xác minh process profile qua CIM sau 2 lần thử: CIM unavailable/
+  );
+  assert.equal(queryCount, 2);
+});
+
+test("kill does not assume success when post-terminate CIM verification keeps failing", async () => {
+  let queryCount = 0;
+  const runner = async (command) => {
+    if (command === "powershell.exe") {
+      queryCount += 1;
+      if (queryCount === 1) return { stdout: JSON.stringify({ ProcessId: 41, ParentProcessId: 0, CommandLine: "Zalo.exe --appdata-id=1001" }) };
+      throw new Error("CIM verification unavailable");
+    }
+    return { stdout: "" };
+  };
+  await assert.rejects(
+    killProfile(1001, runner, { maxQueryAttempts: 2, delay: async () => {} }),
+    (error) => error.message.includes("PID đã biết còn sống: 41") && error.message.includes("CIM verification unavailable")
+  );
+  assert.equal(queryCount, 3);
+});
+
+test("kill waits between terminate and verification and retry", async () => {
+  const events = [];
+  let queryCount = 0;
+  const runner = async (command) => {
+    if (command === "powershell.exe") {
+      events.push("query");
+      queryCount += 1;
+      return { stdout: queryCount < 3 ? JSON.stringify({ ProcessId: 41, ParentProcessId: 0, CommandLine: "Zalo.exe --appdata-id=1001" }) : "" };
+    }
+    events.push("kill");
+    throw new Error("Access is denied");
+  };
+  assert.equal(await killProfile(1001, runner, {
+    maxAttempts: 2,
+    delay: async () => { events.push("delay"); },
+  }), true);
+  assert.deepEqual(events, ["query", "kill", "delay", "query", "kill", "delay", "query"]);
 });
 
 test("window title watcher retries and remains fail-soft", async () => {
@@ -106,12 +264,13 @@ test("Zpool hook injects the visible title into Zalo's renderer", () => {
   assert.match(source, /titleHost\.childNodes/);
   assert.match(source, /Node\.TEXT_NODE/);
   assert.match(source, /textNode\.nodeValue = activeTitle/);
-  assert.match(source, /setProperty\("font-size", "125%", "important"\)/);
-  assert.doesNotMatch(source, /"font-size", "195%"/);
-  assert.doesNotMatch(source, /"font-size", "300%"/);
+  assert.doesNotMatch(source, /removeProperty\("display"\)/);
+  assert.doesNotMatch(source, /setProperty\("pointer-events"/);
+  assert.doesNotMatch(source, /setProperty\("font-size"/);
+  assert.doesNotMatch(source, /setProperty\("overflow"/);
+  assert.doesNotMatch(source, /setProperty\("white-space"/);
   assert.doesNotMatch(source, /position: "fixed"/);
   assert.doesNotMatch(source, /document\.body\.appendChild/);
-  assert.match(source, /"text-overflow", "ellipsis"/);
   assert.match(source, /\.login-title-bar/);
   assert.match(source, /zaloTitle \|\| loginTitle/);
   assert.doesNotMatch(source, /font-size:12px/);
@@ -633,6 +792,9 @@ test("Zpool source scopes the user agent to non-Zalo external web views and keep
 test("Zpool applies the profile proxy to non-default Zalo sessions like ZaX", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "src", "zpool", "zpool.js"), "utf8");
   assert.match(source, /ses\.setProxy\(\{ proxyRules:/);
+  assert.match(source, /proxiedSessions\.add\(ses\);\s*ses\.setProxy/);
+  assert.doesNotMatch(source, /closeAllConnections/);
+  assert.doesNotMatch(source, /proxySetupPromises/);
   assert.match(source, /ses === session\.defaultSession/);
   assert.match(source, /configureProxy\(contents\.session\)/);
   assert.doesNotMatch(source, /appendSwitch\(["']proxy-server["']/);

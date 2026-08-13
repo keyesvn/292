@@ -145,6 +145,7 @@ class UpdateManager extends EventEmitter {
       };
       if (compareVersions(selected.version, this.currentVersion) <= 0) {
         this.publish({ ...common, status: "up-to-date", progress: 0, installerPath: "" });
+        this.removeStaleInstallers();
         return this.projection();
       }
       const finalPath = path.join(this.downloadDirectory, path.basename(selected.asset.name));
@@ -243,6 +244,29 @@ class UpdateManager extends EventEmitter {
 
   installerPath() {
     return this.state.status === "downloaded" && fs.existsSync(this.state.installerPath) ? this.state.installerPath : "";
+  }
+
+  markInstalling() {
+    if (!this.installerPath()) throw new Error("Bộ cài mới chưa sẵn sàng.");
+    this.publish({ status: "installing", progress: 100 });
+  }
+
+  restoreDownloaded() {
+    if (this.installerPath() || (this.state.installerPath && fs.existsSync(this.state.installerPath))) {
+      this.publish({ status: "downloaded", progress: 100 });
+    } else {
+      this.publish({ status: "error", error: "Không thể khởi động bộ cài cập nhật.", errorStage: "install", errorCause: "helper-start" });
+    }
+  }
+
+  removeStaleInstallers() {
+    try {
+      for (const entry of fs.readdirSync(this.downloadDirectory)) {
+        if (/^ZPool(?: Setup |\.Setup\.)\d+\.\d+\.\d+\.exe$/i.test(entry)) {
+          fs.rmSync(path.join(this.downloadDirectory, entry), { force: true });
+        }
+      }
+    } catch {}
   }
 }
 

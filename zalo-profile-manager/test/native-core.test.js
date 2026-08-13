@@ -168,6 +168,16 @@ test("process matching can require the selected Zalo executable", () => {
   assert.deepEqual(rootProcessesForAppDataId(processes, 1001, bundled).map((item) => item.pid), [11]);
 });
 
+test("managed process matching never widens an exact appdata ID", () => {
+  const processes = [
+    { pid: 11, parentPid: 0, appDataId: 1001 },
+    { pid: 12, parentPid: 0, appDataId: 10010 },
+    { pid: 13, parentPid: 0, appDataId: null },
+  ];
+  assert.deepEqual(processesForAppDataId(processes, 1001).map((item) => item.pid), [11]);
+  assert.deepEqual(rootProcessesForAppDataId(processes, 1001).map((item) => item.pid), [11]);
+});
+
 test("runtime reconciliation clears profiles after Zalo exits", () => {
   const profiles = [{ id: "a", appDataId: 1001 }, { id: "b", appDataId: 1002 }];
   const runtime = new Map([
@@ -288,6 +298,28 @@ test("opening an existing process reads its active route from metadata", () => {
   assert.match(source, /const activeRoute = readActiveRoute\(profile\.appDataId\)/);
   assert.doesNotMatch(source, /if \(existing\.length > 0\)[\s\S]*?await refreshRuntimeOnce\(\)/);
   assert.match(source, /activeProxy: activeProfile\.proxy/);
+});
+
+test("lifecycle shutdown delegates process verification to killProfile", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+  const killBlock = source.match(/async function killManagedProfiles\(\) \{[\s\S]*?\n\}/)?.[0] || "";
+  assert.match(killBlock, /await killProfile\(profile\.appDataId\)/);
+  assert.doesNotMatch(killBlock, /queryZaloProcesses\(profile\.appDataId\)/);
+});
+
+test("update install starts only after managed shutdown succeeds", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+  const installBlock = source.match(/ipcMain\.handle\("update:install"[\s\S]*?\n\}\);/)?.[0] || "";
+  assert.ok(installBlock.indexOf("await killManagedProfiles()") < installBlock.indexOf("launchInstallerAfterExit(installer)"));
+  assert.match(source, /Get-Process -Id \$targetPid[\s\S]*Start-Process -FilePath \$installer/);
+  assert.doesNotMatch(installBlock, /spawn\(installer/);
+});
+
+test("before-quit calls app.quit only from the successful shutdown branch", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+  const quitBlock = source.match(/app\.on\("before-quit"[\s\S]*?\n\}\);/)?.[0] || "";
+  assert.match(quitBlock, /killManagedProfiles\(\)\.then\([\s\S]*app\.quit\(\)/);
+  assert.match(quitBlock, /\.catch\([\s\S]*isQuitting = false/);
 });
 
 test("runtime preserves the active proxy separately from pending settings", () => {
